@@ -612,7 +612,7 @@ with tab5:
                     #  in the Standard Score Summary section).
                     lookup[f"CVLT {norm_label} Col2"] = str(row["Col2"]).strip()
                     lookup[f"CVLT {norm_label} Col3"] = str(row["Col3"]).strip()
-                    lookup[f"CVLT {norm_label} Col4"] = str(row["Col4"]).strip()
+                    lookup[f"CVLT {norm_label} Percentile"] = str(row["Col4"]).strip()
 
                     # Optional: if Col4 is a percentile, you can also classify it:
                     try:
