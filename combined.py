@@ -390,9 +390,9 @@ with tab4:
             # … your existing document-generation logic here …
             input_doc    = Document(uploaded_doc)
             template_path = (
-                "n_template_male.docx"
+                "n_male_template.docx"
                 if gender_selection == "Male"
-                else "n_template_female.docx"
+                else "n_female_template.docx"
             )
             template_doc = Document(template_path)
         
