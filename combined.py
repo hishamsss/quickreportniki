@@ -276,7 +276,7 @@ def highlight_unfilled_placeholders(doc):
 
 st.title("\U0001F4C4 Report Writer")
 
-tab1, tab2, tab3, tab4 = st.tabs(["WIAT", "Beery", "CEFI", "Finalize"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["WIAT", "Beery", "CEFI", "CVLT", "Finalize"])
 
 with tab1:
     uploaded_doc = st.file_uploader("\U0001F4C4 Upload WIAT-4 Report (.docx)", type="docx", key="wiat_upload")
@@ -315,6 +315,12 @@ with tab3:
     def _norm_scale(s: str) -> str:
         s = re.sub(r'[^A-Za-z ]', '', str(s))   # letters + spaces only
         s = re.sub(r'\s+', ' ', s).strip()      # collapse spaces
+        return s
+
+    def _norm_cvlt_label(s: str) -> str:
+        # Letters, numbers and spaces only; collapse whitespace
+        s = re.sub(r'[^A-Za-z0-9 ]+', ' ', str(s))
+        s = re.sub(r'\s+', ' ', s).strip()
         return s
             
     cefi_df = pd.DataFrame()
@@ -366,7 +372,97 @@ with tab3:
         except Exception as e:
             st.error(f"Error processing CEFI Teacher PDF: {e}")
             st.exception(e)
+
 with tab4:
+    st.subheader("CVLT-3")
+
+    uploaded_cvlt = st.file_uploader(
+        "Upload CVLT-3 Report (.pdf)",
+        type="pdf",
+        key="cvlt_upload"
+    )
+
+    cvlt_info = {}
+    cvlt_scores = pd.DataFrame()
+
+    if uploaded_cvlt:
+        try:
+            with pdfplumber.open(uploaded_cvlt) as pdf:
+                # Only pages 1, 3, 4, 5, 6  -> zero-based indices 0,2,3,4,5
+                page_indices = [1, 3, 4, 5, 6]
+                texts = []
+
+                for idx in page_indices:
+                    if idx < len(pdf.pages):
+                        page_text = pdf.pages[idx].extract_text() or ""
+                        texts.append(page_text)
+
+                        # --- Page 1: demographic/info fields ---
+                        if idx == 0:
+                            flat = " ".join(page_text.splitlines())
+
+                            m = re.search(r"ID:\s*([^\s]+)", flat)
+                            if m:
+                                cvlt_info["ID"] = m.group(1)
+
+                            m = re.search(r"Name:\s*([^G]+)Gender:", flat)
+                            if m:
+                                cvlt_info["Name"] = m.group(1).strip()
+
+                            m = re.search(r"Test Date:\s*([0-9/]+)", flat)
+                            if m:
+                                cvlt_info["Test Date"] = m.group(1)
+
+                            m = re.search(r"Examiner Name:\s*([^B]+)Birth Date:", flat)
+                            if m:
+                                cvlt_info["Examiner Name"] = m.group(1).strip()
+
+                            m = re.search(r"Gender:\s*([A-Za-z]+)", flat)
+                            if m:
+                                cvlt_info["Gender"] = m.group(1)
+
+                            m = re.search(r"Birth Date:\s*([0-9/]+)", flat)
+                            if m:
+                                cvlt_info["Birth Date"] = m.group(1)
+
+                            m = re.search(r"Age at Testing:\s*([0-9 ]+years [0-9 ]+months)", flat)
+                            if m:
+                                cvlt_info["Age at Testing"] = m.group(1)
+
+                full_text = "\n".join(texts)
+
+            # --- Generic score parser for pages 3–6 ---
+            rows = []
+            for line in full_text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Lines with: label  number  number  number
+                m = re.match(
+                    r"^([A-Za-z0-9–%/'(),\. ]+?)\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)$",
+                    line
+                )
+                if m:
+                    label, c2, c3, c4 = m.groups()
+                    rows.append({
+                        "Label": label.strip(),
+                        "Col2": c2,
+                        "Col3": c3,
+                        "Col4": c4
+                    })
+
+            if rows:
+                cvlt_scores = pd.DataFrame(rows)
+                st.dataframe(cvlt_scores, use_container_width=True)
+
+            st.session_state["cvlt_info"] = cvlt_info
+            st.session_state["cvlt_scores"] = cvlt_scores
+
+        except Exception as e:
+            st.error(f"Error processing CVLT PDF: {e}")
+            st.exception(e)
+with tab5:
     st.subheader("Report Settings")
 
     # 1) Always-visible fields:
@@ -495,7 +591,35 @@ with tab4:
                 lookup["CEFI Heading"] = "The percentiles for the parent rating scales are presented in the table that follows."
             elif not cefi_teacher_df.empty:
                 lookup["CEFI Heading"] = "The percentiles for the teacher rating scales are presented in the table that follows."
-            
+
+            # === CVLT (from CVLT tab) ===
+            cvlt_info = st.session_state.get("cvlt_info", {})
+            cvlt_scores = st.session_state.get("cvlt_scores", pd.DataFrame())
+
+            # Demographic / header info from page 1
+            for key, value in cvlt_info.items():
+                # e.g., "CVLT Name", "CVLT Test Date"
+                lookup[f"CVLT {key}"] = str(value).strip()
+
+            # Score tables from pages 3–6
+            if isinstance(cvlt_scores, pd.DataFrame) and not cvlt_scores.empty:
+                for _, row in cvlt_scores.iterrows():
+                    label = row["Label"]
+                    norm_label = _norm_cvlt_label(label)
+
+                    # Col2 / Col3 / Col4 are the three numeric columns on that line
+                    # (e.g., Sum of scaled scores / Index score / Percentile rank
+                    #  in the Standard Score Summary section).
+                    lookup[f"CVLT {norm_label} Col2"] = str(row["Col2"]).strip()
+                    lookup[f"CVLT {norm_label} Col3"] = str(row["Col3"]).strip()
+                    lookup[f"CVLT {norm_label} Col4"] = str(row["Col4"]).strip()
+
+                    # Optional: if Col4 is a percentile, you can also classify it:
+                    try:
+                        lookup[f"CVLT {norm_label} Classification"] = classify(row["Col4"])
+                        lookup[f"CVLT {norm_label} Percentile*"] = format_percentile_with_suffix(row["Col4"])
+                    except Exception:
+                        pass
 
             # === Fill and output unified report
             lookup = {re.sub(r"\s+", " ", k.strip()): v for k, v in lookup.items()}
