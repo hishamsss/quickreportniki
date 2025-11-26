@@ -19,20 +19,22 @@ def classify(percentile):
     except:
         return "-"
 
-    if percentile <= 1:
+    if percentile <= 2:
         return "Extremely Low"
-    elif 2 <= percentile <= 8:
-        return "Unusually Low"
-    elif 9 <= percentile <= 24:
+    elif 3 <= percentile <= 8:
+        return "Borderline"
+    elif 9 <= percentile <= 15:
+        return "Below Average"
+    elif 16 <= percentile <= 24:
         return "Low Average"
-    elif 25 <= percentile <= 74:
+    elif 25 <= percentile <= 75:
         return "Average"
-    elif 75 <= percentile <= 90:
-        return "High Average"
-    elif 91 <= percentile <= 97:
-        return "Unusually High"
+    elif 76 <= percentile <= 91:
+        return "High Average" 
+    elif 92 <= percentile <= 97:
+        return "Superior"
     elif percentile >= 98:
-        return "Extremely High"
+        return "Very Superior"
     else:
         return "-"
 
@@ -274,57 +276,12 @@ def highlight_unfilled_placeholders(doc):
 
 st.title("\U0001F4C4 Report Writer")
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["WIAT", "WISC", "ChAMP", "Beery", "CEFI", "CBRS", "Finalize"])
+tab1, tab2, tab3, tab4 = st.tabs(["WIAT", "Beery", "CEFI", "Finalize"])
 
 with tab1:
     uploaded_doc = st.file_uploader("\U0001F4C4 Upload WIAT-4 Report (.docx)", type="docx", key="wiat_upload")
 
 with tab2:
-    uploaded_wisc = st.file_uploader("🧠 Upload WISC Report (.docx)", type="docx", key="wisc_upload")
-
-with tab3:
-    st.subheader("🧠 Enter ChAMP Scores")
-
-    champ_fields = [
-        "Lists", "Objects", "Instructions", "Places", "Lists Delayed",
-        "Lists Recognition", "Objects Delayed", "Instructions Delayed",
-        "Instructions Recognition", "Places Delayed", "Verbal Memory Index",
-        "Visual Memory Index", "Immediate Memory Index", "Delayed Memory Index",
-        "Total Memory Index", "Screening Index"
-    ]
-
-    champ_data = []
-    champ_trends = {}
-    for field in champ_fields:
-        if field in ["Lists", "Objects", "Instructions", "Places"]:
-            col1, col2, col3 = st.columns([1.5, 1.5, 1.5])
-            with col1:
-                st.markdown(f"**{field}**")
-            with col2:
-                value = st.text_input("", key=f"champ_{field}")
-            with col3:
-                trend = st.selectbox(
-                    "",
-                    ["improved", "decreased", "stayed the same"],
-                    index=2,
-                    key=f"champ_{field}_change",
-                )
-            champ_trends[field] = trend
-        else:
-            col1, col2 = st.columns([1.5, 1.5])
-            with col1:
-                st.markdown(f"**{field}**")
-            with col2:
-                value = st.text_input("", key=f"champ_{field}")
-        champ_data.append({"Name": field, "Percentile": value})
-
-    champ_df = pd.DataFrame(champ_data)
-    if not champ_df["Percentile"].eq("").all():
-        champ_df["Classification"] = champ_df["Percentile"].apply(classify)
-        champ_df["Percentile*"] = champ_df["Percentile"].apply(format_percentile_with_suffix)
-        champ_df = champ_df.replace("-", "#")
-
-with tab4:
     st.subheader("✍️ Enter Beery Scores")
 
     col1, col2 = st.columns(2)
@@ -345,7 +302,7 @@ with tab4:
     with col2:
         mc = st.text_input("Motor Coordination (MC) Percentile", key="mc_input")
 
-with tab5:
+with tab3:
     st.subheader("CEFI")
 
     uploaded_cefi_parent = st.file_uploader(
@@ -409,54 +366,7 @@ with tab5:
         except Exception as e:
             st.error(f"Error processing CEFI Teacher PDF: {e}")
             st.exception(e)
-
-with tab6:
-    st.subheader("CBRS")
-
-    cbrs_options = [
-        "Academics",
-        "Impulsivity/Hyperactivity",
-        "Inattention",
-        "Oppositional and Aggressive Behaviors",
-        "Mood",
-        "Anxiety",
-        "Emotional Distress",
-        "Social Skills",
-        "Physical Symptoms",
-        "Other Atypical Behaviors and Social Problems",
-    ]
-
-    st.markdown("### Parent")
-    st.multiselect(
-        "Behavior Scales",
-        cbrs_options,
-        key="parent_behavior_scales",
-    )
-    st.text_input("Additional Problems", key="parent_additional_problems")
-    st.text_input("Additional Comments", key="parent_additional_comments")
-    st.text_input("Strengths", key="parent_strengths")
-
-    st.markdown("### Teacher")
-    st.multiselect(
-        "Behavior Scales",
-        cbrs_options,
-        key="teacher_behavior_scales",
-    )
-    st.text_input("Additional Problems", key="teacher_additional_problems")
-    st.text_input("Additional Comments", key="teacher_additional_comments")
-    st.text_input("Strengths", key="teacher_strengths")
-
-    st.markdown("### Self-Report")
-    st.multiselect(
-        "Behavior Scales",
-        cbrs_options,
-        key="self_report_behavior_scales",
-    )
-    st.text_input("Additional Problems", key="self_report_additional_problems")
-    st.text_input("Additional Comments", key="self_report_additional_comments")
-    st.text_input("Strengths", key="self_report_strengths")
-
-with tab7:
+with tab4:
     st.subheader("Report Settings")
 
     # 1) Always-visible fields:
@@ -472,8 +382,8 @@ with tab7:
     )
 
     # 2) If files aren’t uploaded yet, prompt the user:
-    if not uploaded_doc or not uploaded_wisc:
-        st.info("Please upload both your WIAT and WISC reports in the WIAT & WISC tabs above.")
+    if not uploaded_doc:
+        st.info("Please upload both your WIAT report in the WIAT tab.")
     else:
         # 3) Once both are present, show the generate button
         if st.button("Generate Combined Report"):
@@ -542,20 +452,6 @@ with tab7:
             if mc_raw:
                 lookup["MC Raw Score"] = mc_raw
 
-            # === ChAMP
-            if not champ_df.empty:
-                for _, row in champ_df.iterrows():
-                    name = row['Name'].strip()
-                    lookup[f"{name} Percentile"] = row['Percentile']
-                    lookup[f"{name} Percentile*"] = row['Percentile*']
-                    lookup[f"{name} Classification"] = row['Classification']
-            if champ_trends:
-                for name, trend in champ_trends.items():
-                    lookup[f"{name} Change"] = trend
-
-            cefi_df = st.session_state.get("cefi_df", pd.DataFrame())
-            cefi_teacher_df = st.session_state.get("cefi_teacher_df", pd.DataFrame())
-            
             # === CEFI Parent
             if not cefi_df.empty:
                 for _, row in cefi_df.iterrows():
@@ -599,64 +495,7 @@ with tab7:
                 lookup["CEFI Heading"] = "The percentiles for the parent rating scales are presented in the table that follows."
             elif not cefi_teacher_df.empty:
                 lookup["CEFI Heading"] = "The percentiles for the teacher rating scales are presented in the table that follows."
-                
-            # === WISC
-            input_wisc_doc = Document(uploaded_wisc)
-            wisc_combined = pd.DataFrame()
-
-            for i, table in enumerate(input_wisc_doc.tables):
-                data = [[cell.text.strip() for cell in row.cells] for row in table.rows]
-                df = pd.DataFrame(data)
-                if df.shape[0] > 1:
-                    df.columns = df.iloc[0]
-                    df = df.drop(index=0).reset_index(drop=True)
-                    if df.shape[1] >= 5:
-                        if i == 5 or i == 15:
-                            ae_df = df.iloc[:, [1, 4]].copy()
-                        elif df.shape[1] >= 6:
-                            ae_df = df.iloc[:, [1, 5]].copy()
-                        else:
-                            continue
-                        ae_df.columns = ['Name', 'Percentile']
-                        ae_df['Name'] = ae_df['Name'].str.replace(r'[^A-Za-z\s]', '', regex=True).str.strip()
-                        wisc_combined = pd.concat([wisc_combined, ae_df], ignore_index=True)
-
-            if not wisc_combined.empty:
-                wisc_combined.drop_duplicates(subset='Name', inplace=True)
-                wisc_combined["Classification"] = wisc_combined["Percentile"].apply(classify)
-                wisc_combined["Percentile*"] = wisc_combined["Percentile"].apply(format_percentile_with_suffix)
-                wisc_combined = wisc_combined.replace("-", "#")
-
-                for _, row in wisc_combined.iterrows():
-                    name = row['Name'].strip()
-                    lookup[f"{name} Classification"] = row['Classification']
-                    lookup[f"{name} Percentile"] = str(row['Percentile']).strip()
-                    lookup[f"{name} Percentile*"] = str(row['Percentile*']).strip()
             
-
-            # === CBRS
-            def combine_scales(key):
-                items = st.session_state.get(key, [])
-                return ", ".join(items) + "." if items else ""
-
-            cbrs_sections = [
-                ("Parent", "parent"),
-                ("Teacher", "teacher"),
-                ("Self-Report", "self_report"),
-            ]
-
-            for label, prefix in cbrs_sections:
-                scales = combine_scales(f"{prefix}_behavior_scales")
-                if scales:
-                    lookup[f"CBRS {label} Behavior Scales"] = scales
-                for field_label, field_key in [
-                    ("Additional Problems", "additional_problems"),
-                    ("Additional Comments", "additional_comments"),
-                    ("Strengths", "strengths"),
-                ]:
-                    value = st.session_state.get(f"{prefix}_{field_key}", "")
-                    if value:
-                        lookup[f"CBRS {label} {field_label}"] = value
 
             # === Fill and output unified report
             lookup = {re.sub(r"\s+", " ", k.strip()): v for k, v in lookup.items()}
