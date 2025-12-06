@@ -272,6 +272,110 @@ def highlight_unfilled_placeholders(doc):
                 for para in cell.paragraphs:
                     highlight_placeholder_in_runs(para.runs)
 
+
+def format_cefi_scale_list(df, classification, scale_name_map=None):
+    """
+    df: CEFI parent DataFrame with columns ['Scale', 'Percentile', 'Percentile*', 'Classification', 'SW']
+    classification: e.g., 'Average', 'Superior', etc.
+    """
+    subset = df[df["Classification"] == classification].copy()
+    if subset.empty:
+        return ""
+
+    scale_name_map = scale_name_map or {}
+    items = []
+
+    for _, row in subset.iterrows():
+        scale = row["Scale"]
+        display_name = scale_name_map.get(scale, scale)
+        items.append(f"{display_name} ({row['Percentile*']} percentile)")
+
+    if len(items) == 1:
+        return items[0]
+    elif len(items) == 2:
+        return " and ".join(items)
+    else:
+        return "; ".join(items[:-1]) + f"; and {items[-1]}"
+
+def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother") -> str:
+    """
+    Build a CEFI narrative from the parent form only, respecting all
+    classification levels produced by classify():
+    Extremely Low, Borderline, Below Average, Low Average,
+    Average, High Average, Superior, Very Superior.
+    """
+    cefi_df = st.session_state.get("cefi_df")
+    if cefi_df is None or cefi_df.empty:
+        return ""
+
+    cefi_df = cefi_df.copy()
+
+    # Map internal scale names -> nicer narrative labels (adjust as needed)
+    scale_name_map = {
+        "Total": "Full scale",
+        "Attention": "Attention",
+        "Flexibility": "Flexibility",
+        "Planning": "Planning",
+        "Working Memory": "Working Memory",
+        "Emotion Regulation": "Emotion Regulation",
+        "Inhibitory Control": "Inhibitory Control",
+        "Initiation": "Initiation",
+        "Organization": "Organization",
+        "Self-Monitoring": "Self-Monitoring",
+        # add/edit to match your actual CEFI output
+    }
+
+    # ---- Response style from Total row (SW) ----
+    response_style = None
+    total_rows = cefi_df[cefi_df["Scale"].str.strip().str.lower() == "total"]
+    if not total_rows.empty:
+        response_style = (total_rows["SW"].iloc[0] or "").strip()
+
+    # First sentence (Response Style)
+    if response_style and response_style.lower().startswith("consistent"):
+        first_sentence = (
+            f"{child_name}'s {rater_relation} demonstrated a Consistent Response Style "
+            f"in her answers without indications of positive or negative bias."
+        )
+    elif response_style:
+        first_sentence = (
+            f"{child_name}'s {rater_relation} demonstrated a {response_style} Response Style "
+            f"in her answers."
+        )
+    else:
+        first_sentence = (
+            f"{child_name}'s {rater_relation} completed the rating form."
+        )
+
+    sentences = [first_sentence]
+
+    # ---- Classification order and wording (matches your classify() function) ----
+    classification_order = [
+        "Extremely Low",
+        "Borderline",
+        "Below Average",
+        "Low Average",
+        "Average",
+        "High Average",
+        "Superior",
+        "Very Superior",
+    ]
+
+    # You can tweak phrasing per band if you want later
+    for cls in classification_order:
+        scale_list = format_cefi_scale_list(cefi_df, cls, scale_name_map)
+        if not scale_list:
+            continue
+
+        # For all bands, same basic template:
+        # "She rated Ms. Smith in the <cls> range on the following CEFI scales: ..."
+        sentences.append(
+            f" She rated {child_name} in the {cls} range on the following CEFI scales: {scale_list}."
+        )
+
+    return "".join(sentences)
+
+
 # === Streamlit App ===
 
 st.title("\U0001F4C4 Report Writer")
@@ -591,6 +695,15 @@ with tab5:
                 lookup["CEFI Heading"] = "The percentiles for the parent rating scales are presented in the table that follows."
             elif not cefi_teacher_df.empty:
                 lookup["CEFI Heading"] = "The percentiles for the teacher rating scales are presented in the table that follows."
+
+            # === CEFI Parent narrative ===
+            if st.session_state.get("cefi_df") is not None and not st.session_state["cefi_df"].empty:
+                parent_narrative = build_cefi_parent_narrative(
+                    child_name="Ms. Smith",
+                    rater_relation="mother"
+                )
+                lookup["CEFI Parent Narrative"] = parent_narrative
+
 
             # === CVLT (from CVLT tab) ===
             cvlt_info = st.session_state.get("cvlt_info", {})
