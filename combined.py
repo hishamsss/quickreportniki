@@ -578,26 +578,16 @@ with tab5:  # CAARS-2 tab
     caars_tscores = {}
     caars_symptom_counts = []
     caars_adhd_prob = None
-
-    # Order of scales along the CAARS bar graph / narrative
-    # Make this MATCH your Word placeholders exactly:
-    # {{CAARS Inattention/Executive Dysfunction T-score}}
-    # {{CAARS Hyperactivity T-score}}
-    # {{CAARS Impulsivity T-score}}
-    # {{CAARS Emotional Dysregulation T-score}}
-    # {{CAARS Negative Self-Concept T-score}}
-    # {{CAARS DSM ADHD Inattentive Symptoms T-score}}
-    # {{CAARS DSM ADHD Hyperactive/Impulsive Symptoms T-score}}
-    # {{CAARS Total ADHD Symptoms T-score}}
+    
     scale_order = [
         "Inattention/Executive Dysfunction",
         "Hyperactivity",
         "Impulsivity",
         "Emotional Dysregulation",
         "Negative Self-Concept",
-        "DSM ADHD Inattentive Symptoms",
-        "DSM ADHD Hyperactive/Impulsive Symptoms",
-        "Total ADHD Symptoms",
+        "DSM ADHD Inattentive",
+        "DSM ADHD Hyperactive/Impulsive",
+        "Total ADHD",
     ]
 
 
