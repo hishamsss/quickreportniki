@@ -646,7 +646,7 @@ with tab4:
             st.error(f"Error processing CVLT PDF: {e}")
             st.exception(e)
 
-with tab5:  # e.g., "CAARS" tab
+with tab5:  # your CAARS tab
     st.subheader("CAARS-2 Self-Report")
 
     uploaded_caars = st.file_uploader(
@@ -657,35 +657,68 @@ with tab5:  # e.g., "CAARS" tab
 
     if uploaded_caars:
         try:
-            import pdfplumber
-
             with pdfplumber.open(uploaded_caars) as pdf:
-                # Page 4 in the report -> index 3
+                # Page 4 in the report (0-based index 3)
                 tables = pdf.pages[3].extract_tables()
+
+            # Helper to find columns by fuzzy name
+            import re
+
+            def _find_cols(df, want_t=True, want_guideline=True):
+                cols = list(df.columns)
+                scale_col = cols[0]  # first column is always the scale name
+
+                t_col = None
+                guid_col = None
+
+                for c in cols:
+                    name = str(c)
+                    if want_t and t_col is None and re.search(r"t.?score", name, re.I):
+                        t_col = c
+                    if want_guideline and guid_col is None and "guideline" in name.lower():
+                        guid_col = c
+
+                return scale_col, t_col, guid_col
 
             # --- Content Scales table ---
             content_raw = pd.DataFrame(tables[0])
             content_raw.columns = content_raw.iloc[0]
             content_raw = content_raw.drop(index=0).reset_index(drop=True)
-            content_df = content_raw.rename(columns={content_raw.columns[0]: "Scale"})
-            content_df = content_df[["Scale", "T-score", "Guideline"]]
+
+            scale_col, t_col, guid_col = _find_cols(content_raw)
+
+            content_df = content_raw[[scale_col, t_col, guid_col]].copy()
+            content_df.columns = ["Scale", "T-score", "Guideline"]
 
             # --- DSM Scales table ---
             dsm_raw = pd.DataFrame(tables[1])
             dsm_raw.columns = dsm_raw.iloc[0]
             dsm_raw = dsm_raw.drop(index=0).reset_index(drop=True)
-            dsm_df = dsm_raw.rename(columns={dsm_raw.columns[0]: "Scale"})
-            dsm_df = dsm_df[["Scale", "T-score", "Guideline"]]
+
+            scale_col, t_col, guid_col = _find_cols(dsm_raw)
+
+            dsm_df = dsm_raw[[scale_col, t_col, guid_col]].copy()
+            dsm_df.columns = ["Scale", "T-score", "Guideline"]
 
             # --- ADHD Index table ---
             index_raw = pd.DataFrame(tables[2])
             index_raw.columns = index_raw.iloc[0]
             index_raw = index_raw.drop(index=0).reset_index(drop=True)
-            # Row looks like: Scale | Raw Score | Probability Score | 90% CI | Guideline
-            adhd_index_prob = str(index_raw.loc[0, "Probability Score"]).strip()  # e.g., "98%"
-            adhd_index_guideline = str(index_raw.loc[0, "Guideline"]).strip()     # e.g., "Very High"
 
-            # Store for later use
+            # find "Probability" and "Guideline" columns flexibly
+            prob_col = None
+            idx_guid_col = None
+            for c in index_raw.columns:
+                name = str(c).lower()
+                if prob_col is None and "probab" in name:
+                    prob_col = c
+                if idx_guid_col is None and "guideline" in name:
+                    idx_guid_col = c
+
+            adhd_index_prob = str(index_raw.loc[0, prob_col]).strip() if prob_col else ""
+            adhd_index_guideline = str(index_raw.loc[0, idx_guid_col]).strip() if idx_guid_col else ""
+
+            # Store for later
             st.session_state["caars_content_df"] = content_df
             st.session_state["caars_dsm_df"] = dsm_df
             st.session_state["caars_index"] = {
@@ -693,12 +726,14 @@ with tab5:  # e.g., "CAARS" tab
                 "Guideline": adhd_index_guideline,
             }
 
-            # Optional: show preview
-            st.write("Content Scales")
-            st.dataframe(content_df)
-            st.write("DSM Scales")
-            st.dataframe(dsm_df)
-            st.write("ADHD Index")
+            # DEBEUG REMOVE
+            st.write("Content DF preview:")
+            st.dataframe(content_df.head())
+            
+            st.write("DSM DF preview:")
+            st.dataframe(dsm_df.head())
+            
+            st.write("Index info:")
             st.json(st.session_state["caars_index"])
 
         except Exception as e:
