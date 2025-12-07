@@ -646,7 +646,7 @@ with tab4:
             st.error(f"Error processing CVLT PDF: {e}")
             st.exception(e)
 
-with tabX:  # your CAARS tab name
+with tab5:  # your CAARS tab name
     st.subheader("CAARS-2 Self-Report")
 
     uploaded_caars = st.file_uploader(
