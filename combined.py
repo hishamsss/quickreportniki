@@ -566,7 +566,89 @@ with tab4:
             st.error(f"Error processing CVLT PDF: {e}")
             st.exception(e)
 
-with tab5:  # your CAARS tab name
+with tab5:  # CAARS-2 tab
+    st.subheader("CAARS-2 Self-Report")
+
+    uploaded_caars = st.file_uploader(
+        "Upload CAARS-2 Self-Report (.pdf)",
+        type="pdf",
+        key="caars_upload",
+    )
+
+    caars_tscores = {}
+    caars_symptom_count = []
+    caars_adhd_prob = None
+
+    if uploaded_caars:
+        try:
+            with pdfplumber.open(uploaded_caars) as pdf:
+                # --- Page 2 (index 1): T-scores + Symptoms Count ---
+                if len(pdf.pages) > 1:
+                    page2 = pdf.pages[1]
+
+                    # 1) Table where headers are scale names and next row has T-scores
+                    tables2 = page2.extract_tables()
+                    if tables2:
+                        tbl = tables2[0]
+                        df = pd.DataFrame(tbl)
+                        if df.shape[0] >= 2:
+                            headers = [str(x).strip() for x in df.iloc[0]]
+                            t_row = df.iloc[1]
+                            for col_idx, scale in enumerate(headers):
+                                if scale and col_idx < len(t_row):
+                                    t_val = str(t_row[col_idx]).strip()
+                                    if t_val:
+                                        caars_tscores[scale] = t_val
+
+                    # 2) Symptom Count table: find the row with "Symptom Count"
+                    for raw_tbl in tables2:
+                        df = pd.DataFrame(raw_tbl)
+                        found_header_row = None
+                        for i, row in df.iterrows():
+                            if any(str(cell).strip() == "Symptom Count" for cell in row):
+                                found_header_row = i
+                                break
+
+                        if found_header_row is not None and found_header_row + 1 < len(df):
+                            data_row = df.iloc[found_header_row + 1]
+                            for val in data_row:
+                                s = str(val).strip()
+                                # look for patterns like "7/9", "6/9", etc.
+                                m = re.match(r"^(\d+)/9$", s)
+                                if m:
+                                    caars_symptom_counts.append(m.group(1))  # just the "7", "6"
+                            # once we’ve found one Symptom Count table, we can stop
+                            break
+                            
+                # --- Page 3 (index 2): CAARS 2–ADHD Index probability (e.g., "98%") ---
+                if len(pdf.pages) > 2:
+                    page3 = pdf.pages[2]
+                    text3 = page3.extract_text() or ""
+
+                    # Prefer a match near "CAARS 2-ADHD Index", but fall back to first % if needed
+                    m = re.search(
+                        r"CAARS-?2.*?ADHD Index.*?(\d+)%", text3,
+                        flags=re.IGNORECASE | re.DOTALL
+                    )
+                    if not m:
+                        m = re.search(r"(\d+)%", text3)
+                    if m:
+                        caars_adhd_prob = m.group(1) + "%"
+
+            st.session_state["caars_tscores"] = caars_tscores
+            st.session_state["caars_symptom_counts"] = caars_symptom_counts
+            st.session_state["caars_adhd_index_prob"] = caars_adhd_prob
+
+            # Debug
+            st.write("CAARS T-scores:", caars_tscores)
+            st.write("CAARS Symptom Counts:", caars_symptom_counts)
+            st.write("CAARS ADHD Index Probability:", caars_adhd_prob)
+
+
+        except Exception as e:
+            st.error(f"Error processing CAARS-2 PDF: {e}")
+            st.exception(e)
+
 
 with tab6:
     st.subheader("Report Settings")
@@ -735,9 +817,26 @@ with tab6:
                         lookup[f"CVLT {norm_label} Percentile*"] = format_percentile_with_suffix(row["Col4"])
                     except Exception:
                         pass
+                        
+            # === CAARS-2 (from CAARS tab) ===
+            caars_tscores = st.session_state.get("caars_tscores", {})
+            caars_symptom_counts = st.session_state.get("caars_symptom_counts", [])
+            caars_adhd_prob = st.session_state.get("caars_adhd_index_prob")
 
-            # === CAARS-2 Narrative ===
-           
+            # T-scores from the header row table on page 2
+            # Placeholders: {{CAARS <Scale> T-score}}
+            for scale, t_val in caars_tscores.items():
+                lookup[f"CAARS {scale} T-score"] = str(t_val).strip()
+
+            # Symptom counts (two values, e.g., 7 and 6)
+            if len(caars_symptom_counts) > 0:
+                lookup["CAARS Symptom Count 1"] = str(caars_symptom_counts[0]).strip()
+            if len(caars_symptom_counts) > 1:
+                lookup["CAARS Symptom Count 2"] = str(caars_symptom_counts[1]).strip()
+
+            # ADHD Index Probability (e.g., "98%")
+            if caars_adhd_prob is not None:
+                lookup["CAARS ADHD Index Probability"] = str(caars_adhd_prob).strip()
 
             # === Fill and output unified report
             lookup = {re.sub(r"\s+", " ", k.strip()): v for k, v in lookup.items()}
