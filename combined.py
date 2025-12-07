@@ -873,6 +873,15 @@ with tab6:
                     except Exception:
                         pass
 
+            # === CAARS-2 Narrative ===
+            if (
+                st.session_state.get("caars_content_df") is not None
+                and not st.session_state["caars_content_df"].empty
+            ):
+                caars_narr = build_caars2_narrative(name="Ms. Smith", pronoun_cap="Her")
+                lookup["CAARS2 Narrative"] = caars_narr
+
+
             # === Fill and output unified report
             lookup = {re.sub(r"\s+", " ", k.strip()): v for k, v in lookup.items()}
             replace_placeholders(template_doc, lookup)
