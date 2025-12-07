@@ -375,6 +375,33 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
 
     return "".join(sentences)
 
+def classify_caars_tscore(t):
+    """
+    Classify a CAARS T-score into:
+    - Very Elevated (>= 70)
+    - Elevated (65–69)
+    - Slightly Elevated (60–64)
+    - Not Elevated (< 60)
+    """
+    if t is None or t == "":
+        return ""
+
+    try:
+        # t might be string from PDF, so normalize
+        t_val = int(str(t).strip())
+    except ValueError:
+        return ""
+
+    if t_val >= 70:
+        return "Very Elevated"
+    elif 65 <= t_val <= 69:
+        return "Elevated"
+    elif 60 <= t_val <= 64:
+        return "Slightly Elevated"
+    else:
+        return "Not Elevated"
+
+
 # === Streamlit App ===
 
 st.title("\U0001F4C4 Report Writer")
@@ -662,8 +689,15 @@ with tab5:  # CAARS-2 tab
             st.session_state["caars_symptom_counts"] = caars_symptom_counts
             st.session_state["caars_adhd_index_prob"] = caars_adhd_prob
 
+            caars_guidelines = {
+                scale: classify_caars_tscore(t_val)
+                for scale, t_val in caars_tscores.items()
+            }
+            st.session_state["caars_guidelines"] = caars_guidelines
+            
             # Debug – you should now see 8 T-scores in order
             st.write("CAARS T-scores:", caars_tscores)
+            st.write("CAARS Guidelines:", caars_guidelines)
             st.write("CAARS Symptom Counts:", caars_symptom_counts)
             st.write("CAARS ADHD Index Probability:", caars_adhd_prob)
 
@@ -841,6 +875,7 @@ with tab6:
                         
             # === CAARS-2 (from CAARS tab) ===
             caars_tscores = st.session_state.get("caars_tscores", {})
+            caars_guidelines = st.session_state.get("caars_guidelines", {})
             caars_symptom_counts = st.session_state.get("caars_symptom_counts", [])
             caars_adhd_prob = st.session_state.get("caars_adhd_index_prob")
 
@@ -848,6 +883,8 @@ with tab6:
             # Placeholders: {{CAARS <Scale> T-score}}
             for scale, t_val in caars_tscores.items():
                 lookup[f"CAARS {scale} T-score"] = str(t_val).strip()
+            for scale, guideline in caars_guidelines.items():
+                lookup[f"CAARS {scale} Guideline"] = guideline
 
             # Symptom counts (two values, e.g., 7 and 6)
             if len(caars_symptom_counts) > 0:
