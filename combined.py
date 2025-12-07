@@ -325,77 +325,72 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
         # add/edit to match your actual CEFI output
     }
 
-def build_caars_narrative(client_name="Ms. Smith"):
-    """
-    Build the CAARS narrative using the extracted T-scores and CAARS-specific
-    classification (Very Elevated, Elevated, Slightly Elevated, Not Elevated).
-    """
-
+def build_caars_narrative(client_name="the client"):
     tscores = st.session_state.get("caars_tscores", {})
     guidelines = st.session_state.get("caars_guidelines", {})
     adhd_prob = st.session_state.get("caars_adhd_index_prob", "")
 
-    if not tscores:
-        return ""
-
-    # Group scales by guideline
-    groups = {
+    # Build buckets
+    buckets = {
         "Very Elevated": [],
         "Elevated": [],
         "Slightly Elevated": [],
-        "Not Elevated": [],
+        "Not Elevated": []
     }
 
-    for scale, tval in tscores.items():
-        gl = guidelines.get(scale, "Not Elevated")
-        groups[gl].append(f"{scale} (T={tval})")
-
-    # Helper to format lists: A, B, and C
-    def join_items(items):
-        if len(items) == 0:
-            return ""
-        if len(items) == 1:
-            return items[0]
-        if len(items) == 2:
-            return f"{items[0]} and {items[1]}"
-        return ", ".join(items[:-1]) + f", and {items[-1]}"
+    for scale, t in tscores.items():
+        cat = guidelines.get(scale, "Not Elevated")
+        buckets[cat].append((scale, t))
 
     narrative_parts = []
 
-    # Very Elevated
-    if groups["Very Elevated"]:
+    # --- VERY ELEVATED ---
+    if buckets["Very Elevated"]:
+        items = [f"{s} (T={t})" for s, t in buckets["Very Elevated"]]
         narrative_parts.append(
-            f"{client_name} reported Very Elevated scores in {join_items(groups['Very Elevated'])}"
+            f"{client_name} reported Very Elevated scores in " + format_list(items) + "."
         )
 
-    # Elevated
-    if groups["Elevated"]:
+    # --- ELEVATED ---
+    if buckets["Elevated"]:
+        items = [f"{s} (T={t})" for s, t in buckets["Elevated"]]
+        prefix = "Additionally," if narrative_parts else f"{client_name} reported"
         narrative_parts.append(
-            f"as well as Elevated scores in {join_items(groups['Elevated'])}"
+            f"{prefix} Elevated scores in " + format_list(items) + "."
         )
 
-    # Slightly Elevated
-    if groups["Slightly Elevated"]:
+    # --- SLIGHTLY ELEVATED ---
+    if buckets["Slightly Elevated"]:
+        items = [f"{s} (T={t})" for s, t in buckets["Slightly Elevated"]]
+        prefix = "She also demonstrated" if narrative_parts else f"{client_name} demonstrated"
         narrative_parts.append(
-            f"as well as Slightly Elevated scores in {join_items(groups['Slightly Elevated'])}"
+            f"{prefix} Slightly Elevated scores in " + format_list(items) + "."
         )
 
-    # Not Elevated
-    if groups["Not Elevated"]:
+    # --- NOT ELEVATED ---
+    if buckets["Not Elevated"]:
+        items = [f"{s} (T={t})" for s, t in buckets["Not Elevated"]]
         narrative_parts.append(
-            f"Her scores for {join_items(groups['Not Elevated'])} were Not Elevated"
+            f"Her scores for " + format_list(items) + " were Not Elevated."
         )
 
-    # ADHD Index probability sentence
+    # --- ADHD INDEX PROBABILITY ---
     if adhd_prob:
         narrative_parts.append(
-            f"Her ADHD Index was in the Very High range, corresponding to a {adhd_prob} probability"
+            f"Her ADHD Index was in the Very High range, corresponding to a {adhd_prob} probability."
         )
 
-    # Combine with proper punctuation
-    narrative = ". ".join(narrative_parts) + "."
+    return " ".join(narrative_parts)
 
-    return narrative
+
+def format_list(items):
+    """Turns a list into natural language: a, b, and c."""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
+
 
 
     # ---- Response style from Total row (SW) ----
