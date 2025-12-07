@@ -646,7 +646,7 @@ with tab4:
             st.error(f"Error processing CVLT PDF: {e}")
             st.exception(e)
 
-with tab5:  # your CAARS tab
+with tabX:  # your CAARS tab name
     st.subheader("CAARS-2 Self-Report")
 
     uploaded_caars = st.file_uploader(
@@ -658,54 +658,65 @@ with tab5:  # your CAARS tab
     if uploaded_caars:
         try:
             with pdfplumber.open(uploaded_caars) as pdf:
-                # Page 4 in the report (0-based index 3)
+                # Page 4 in the report is index 3 (0-based)
                 tables = pdf.pages[3].extract_tables()
 
-            # Helper to find columns by fuzzy name
             import re
 
-            def _find_cols(df, want_t=True, want_guideline=True):
+            def _prepare_table(raw_tbl):
+                """Turn a raw pdfplumber table into a DataFrame with header row as columns."""
+                df = pd.DataFrame(raw_tbl)
+                header = df.iloc[0].astype(str).tolist()
+                df = df.drop(index=0).reset_index(drop=True)
+                df.columns = header
+                return df
+
+            def _select_scale_t_guideline(df):
+                """
+                From a full CAARS table, pull out:
+                  - first column = scale
+                  - one T-score-like column
+                  - one Guideline-like column
+                Returns a cleaned df with columns: Scale, T-score, Guideline
+                """
                 cols = list(df.columns)
-                scale_col = cols[0]  # first column is always the scale name
+                scale_col = cols[0]
 
                 t_col = None
-                guid_col = None
+                g_col = None
 
                 for c in cols:
                     name = str(c)
-                    if want_t and t_col is None and re.search(r"t.?score", name, re.I):
+                    if t_col is None and re.search(r"t.?score", name, re.I):
                         t_col = c
-                    if want_guideline and guid_col is None and "guideline" in name.lower():
-                        guid_col = c
+                    if g_col is None and "guideline" in name.lower():
+                        g_col = c
 
-                return scale_col, t_col, guid_col
+                # Build list of columns we actually have
+                selected_cols = [scale_col]
+                new_names = ["Scale"]
+
+                if t_col is not None:
+                    selected_cols.append(t_col)
+                    new_names.append("T-score")
+                if g_col is not None:
+                    selected_cols.append(g_col)
+                    new_names.append("Guideline")
+
+                sub = df[selected_cols].copy()
+                sub.columns = new_names
+                return sub
 
             # --- Content Scales table ---
-            content_raw = pd.DataFrame(tables[0])
-            content_raw.columns = content_raw.iloc[0]
-            content_raw = content_raw.drop(index=0).reset_index(drop=True)
-
-            scale_col, t_col, guid_col = _find_cols(content_raw)
-
-            content_df = content_raw[[scale_col, t_col, guid_col]].copy()
-            content_df.columns = ["Scale", "T-score", "Guideline"]
+            content_raw = _prepare_table(tables[0])
+            content_df = _select_scale_t_guideline(content_raw)
 
             # --- DSM Scales table ---
-            dsm_raw = pd.DataFrame(tables[1])
-            dsm_raw.columns = dsm_raw.iloc[0]
-            dsm_raw = dsm_raw.drop(index=0).reset_index(drop=True)
-
-            scale_col, t_col, guid_col = _find_cols(dsm_raw)
-
-            dsm_df = dsm_raw[[scale_col, t_col, guid_col]].copy()
-            dsm_df.columns = ["Scale", "T-score", "Guideline"]
+            dsm_raw = _prepare_table(tables[1])
+            dsm_df = _select_scale_t_guideline(dsm_raw)
 
             # --- ADHD Index table ---
-            index_raw = pd.DataFrame(tables[2])
-            index_raw.columns = index_raw.iloc[0]
-            index_raw = index_raw.drop(index=0).reset_index(drop=True)
-
-            # find "Probability" and "Guideline" columns flexibly
+            index_raw = _prepare_table(tables[2])
             prob_col = None
             idx_guid_col = None
             for c in index_raw.columns:
@@ -715,26 +726,20 @@ with tab5:  # your CAARS tab
                 if idx_guid_col is None and "guideline" in name:
                     idx_guid_col = c
 
-            adhd_index_prob = str(index_raw.loc[0, prob_col]).strip() if prob_col else ""
-            adhd_index_guideline = str(index_raw.loc[0, idx_guid_col]).strip() if idx_guid_col else ""
+            adhd_index_prob = str(index_raw.iloc[0][prob_col]).strip() if prob_col else ""
+            adhd_index_guideline = str(index_raw.iloc[0][idx_guid_col]).strip() if idx_guid_col else ""
 
-            # Store for later
+            # Store for narrative builder later
             st.session_state["caars_content_df"] = content_df
             st.session_state["caars_dsm_df"] = dsm_df
             st.session_state["caars_index"] = {
                 "Probability": adhd_index_prob,
                 "Guideline": adhd_index_guideline,
             }
-
-            # DEBEUG REMOVE
-            st.write("Content DF preview:")
-            st.dataframe(content_df.head())
-            
-            st.write("DSM DF preview:")
-            st.dataframe(dsm_df.head())
-            
-            st.write("Index info:")
-            st.json(st.session_state["caars_index"])
+            #DEBUG
+            st.write("Content DF:", content_df.head())
+            st.write("DSM DF:", dsm_df.head())
+            st.write("Index info:", st.session_state["caars_index"])
 
         except Exception as e:
             st.error(f"Error processing CAARS-2 PDF: {e}")
