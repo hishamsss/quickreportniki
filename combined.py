@@ -375,86 +375,6 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
 
     return "".join(sentences)
 
-def _format_caars_scale_list(df: pd.DataFrame, guideline: str) -> str:
-    """
-    Return something like:
-    'Inattention/Executive Dysfunction (T=71) and Hyperactivity (T=74)'
-    for a given guideline (e.g., 'Very Elevated', 'Not Elevated').
-    """
-    if df is None or df.empty:
-        return ""
-
-    sub = df[df["Guideline"] == guideline].copy()
-    if sub.empty:
-        return ""
-
-    items = [f"{row['Scale']} (T={row['T-score']})" for _, row in sub.iterrows()]
-
-    if len(items) == 1:
-        return items[0]
-    elif len(items) == 2:
-        return " and ".join(items)
-    else:
-        return "; ".join(items[:-1]) + f"; and {items[-1]}"
-
-
-def build_caars2_narrative(name: str, pronoun_cap: str = "Her") -> str:
-    """
-    Build a CAARS-2 narrative like:
-
-    Ms. Smith reported Very Elevated scores in Inattention/Executive Dysfunction (T=71) and Hyperactivity (T=74),
-    as well as Elevated scores in DSM ADHD Inattentive Symptoms (T=64), DSM ADHD Hyperactive/Impulsive Symptoms (T=68),
-    and Total ADHD Symptoms (T=67). Her scores for Impulsivity (T=57), Emotional Dysregulation (T=51),
-    and Negative Self-Concept (T=43) were Not Elevated. Her ADHD Index was in the Very High range,
-    corresponding to a 98% probability.
-    """
-    content_df = st.session_state.get("caars_content_df", pd.DataFrame())
-    dsm_df = st.session_state.get("caars_dsm_df", pd.DataFrame())
-    index_info = st.session_state.get("caars_index", {})
-
-    pronoun_lower = pronoun_cap.lower()
-
-    # --- Very Elevated (Content) ---
-    very_elevated_content = _format_caars_scale_list(content_df, "Very Elevated")
-
-    # --- Elevated (DSM) ---
-    elevated_dsm = _format_caars_scale_list(dsm_df, "Elevated")
-
-    # --- Not Elevated (Content) ---
-    not_elevated_content = _format_caars_scale_list(content_df, "Not Elevated")
-
-    sentences = []
-
-    # Sentence 1: Very Elevated + Elevated
-    if very_elevated_content or elevated_dsm:
-        s1 = f"{name} reported"
-
-        if very_elevated_content:
-            s1 += f" Very Elevated scores in {very_elevated_content}"
-        if elevated_dsm:
-            if very_elevated_content:
-                s1 += f", as well as Elevated scores in {elevated_dsm}"
-            else:
-                s1 += f" Elevated scores in {elevated_dsm}"
-
-        s1 += "."
-        sentences.append(s1)
-
-    # Sentence 2: Not Elevated content scales
-    if not_elevated_content:
-        s2 = f" {pronoun_cap} scores for {not_elevated_content} were Not Elevated."
-        sentences.append(s2)
-
-    # Sentence 3: ADHD Index
-    idx_guideline = index_info.get("Guideline")
-    idx_prob = index_info.get("Probability")
-    if idx_guideline and idx_prob:
-        s3 = f" {pronoun_cap} ADHD Index was in the {idx_guideline} range, corresponding to a {idx_prob} probability."
-        sentences.append(s3)
-
-    return "".join(sentences).strip()
-
-
 # === Streamlit App ===
 
 st.title("\U0001F4C4 Report Writer")
@@ -647,116 +567,6 @@ with tab4:
             st.exception(e)
 
 with tab5:  # your CAARS tab name
-    st.subheader("CAARS-2 Self-Report")
-
-    uploaded_caars = st.file_uploader(
-        "Upload CAARS-2 Self-Report (.pdf)",
-        type="pdf",
-        key="caars_upload",
-    )
-
-    if uploaded_caars:
-        try:
-            with pdfplumber.open(uploaded_caars) as pdf:
-                # Page 4 in the report is index 3 (0-based)
-                tables = pdf.pages[3].extract_tables()
-
-            import re
-
-            def _prepare_table(raw_tbl):
-                """Turn a raw pdfplumber table into a DataFrame using the row
-                that contains T-score & Guideline as the header row."""
-                df = pd.DataFrame(raw_tbl)
-            
-                header_idx = 0
-                for i, row in df.iterrows():
-                    row_str = " ".join(str(x) for x in row)
-                    if re.search(r"t.?score", row_str, re.I) and "guideline" in row_str.lower():
-                        header_idx = i
-                        break
-            
-                header = df.iloc[header_idx].astype(str).tolist()
-                df = df.iloc[header_idx + 1 :].reset_index(drop=True)
-                df.columns = header
-                return df
-
-
-            def _select_scale_t_guideline(df):
-                """
-                From a full CAARS table, pull out:
-                  - first column = scale
-                  - one T-score-like column
-                  - one Guideline-like column
-                Returns a cleaned df with columns: Scale, T-score, Guideline
-                """
-                cols = list(df.columns)
-                scale_col = cols[0]
-
-                t_col = None
-                g_col = None
-
-                for c in cols:
-                    name = str(c)
-                    if t_col is None and re.search(r"t.?score", name, re.I):
-                        t_col = c
-                    if g_col is None and "guideline" in name.lower():
-                        g_col = c
-
-                # Build list of columns we actually have
-                selected_cols = [scale_col]
-                new_names = ["Scale"]
-
-                if t_col is not None:
-                    selected_cols.append(t_col)
-                    new_names.append("T-score")
-                if g_col is not None:
-                    selected_cols.append(g_col)
-                    new_names.append("Guideline")
-
-                sub = df[selected_cols].copy()
-                sub.columns = new_names
-                return sub
-
-            # --- Content Scales table ---
-            content_raw = _prepare_table(tables[0])
-            content_df = _select_scale_t_guideline(content_raw)
-
-            # --- DSM Scales table ---
-            dsm_raw = _prepare_table(tables[1])
-            dsm_df = _select_scale_t_guideline(dsm_raw)
-
-            content_df["Guideline"] = content_df["Guideline"].astype(str).str.strip()
-            dsm_df["Guideline"] = dsm_df["Guideline"].astype(str).str.strip()
-
-            # --- ADHD Index table ---
-            index_raw = _prepare_table(tables[2])
-            prob_col = None
-            idx_guid_col = None
-            for c in index_raw.columns:
-                name = str(c).lower()
-                if prob_col is None and "probab" in name:
-                    prob_col = c
-                if idx_guid_col is None and "guideline" in name:
-                    idx_guid_col = c
-
-            adhd_index_prob = str(index_raw.iloc[0][prob_col]).strip() if prob_col else ""
-            adhd_index_guideline = str(index_raw.iloc[0][idx_guid_col]).strip() if idx_guid_col else ""
-
-            # Store for narrative builder later
-            st.session_state["caars_content_df"] = content_df
-            st.session_state["caars_dsm_df"] = dsm_df
-            st.session_state["caars_index"] = {
-                "Probability": adhd_index_prob,
-                "Guideline": adhd_index_guideline,
-            }
-            #DEBUG
-            st.write("Content DF:", content_df.head())
-            st.write("DSM DF:", dsm_df.head())
-            st.write("Index info:", st.session_state["caars_index"])
-
-        except Exception as e:
-            st.error(f"Error processing CAARS-2 PDF: {e}")
-            st.exception(e)
 
 with tab6:
     st.subheader("Report Settings")
@@ -927,13 +737,7 @@ with tab6:
                         pass
 
             # === CAARS-2 Narrative ===
-            if (
-                st.session_state.get("caars_content_df") is not None
-                and not st.session_state["caars_content_df"].empty
-            ):
-                caars_narr = build_caars2_narrative(name="Ms. Smith", pronoun_cap="Her")
-                lookup["CAARS2 Narrative"] = caars_narr
-
+           
 
             # === Fill and output unified report
             lookup = {re.sub(r"\s+", " ", k.strip()): v for k, v in lookup.items()}
