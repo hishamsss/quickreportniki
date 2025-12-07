@@ -608,7 +608,7 @@ with tab5:  # CAARS-2 tab
                 if len(pdf.pages) > 1:
                     page2 = pdf.pages[1]
 
-                    # --- Extract T-scores using 20th → 27th numeric tokens ---
+                    # --- Extract T-scores using 20th → 28th numeric tokens ---
                     text2 = page2.extract_text() or ""
                     lines = text2.split("\n")
                     
@@ -621,9 +621,9 @@ with tab5:  # CAARS-2 tab
                     # Debug:
                     # st.write("ALL NUMBERS ON PAGE 2:", all_numbers)
                     
-                    # Safeguard: ensure we have at least 27 numbers
-                    if len(all_numbers) >= 27:
-                        tscore_block = all_numbers[19:27]  # Python index: 19→26 inclusive = 20th→27th
+                    # Safeguard: ensure we have at least 28 numbers
+                    if len(all_numbers) >= 28:
+                        tscore_block = all_numbers[20:28]  # Python index: 19→26 inclusive = 20th→27th
                     else:
                         tscore_block = []
                     
