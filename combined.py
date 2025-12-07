@@ -325,6 +325,79 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
         # add/edit to match your actual CEFI output
     }
 
+def build_caars_narrative(client_name="Ms. Smith"):
+    """
+    Build the CAARS narrative using the extracted T-scores and CAARS-specific
+    classification (Very Elevated, Elevated, Slightly Elevated, Not Elevated).
+    """
+
+    tscores = st.session_state.get("caars_tscores", {})
+    guidelines = st.session_state.get("caars_guidelines", {})
+    adhd_prob = st.session_state.get("caars_adhd_index_prob", "")
+
+    if not tscores:
+        return ""
+
+    # Group scales by guideline
+    groups = {
+        "Very Elevated": [],
+        "Elevated": [],
+        "Slightly Elevated": [],
+        "Not Elevated": [],
+    }
+
+    for scale, tval in tscores.items():
+        gl = guidelines.get(scale, "Not Elevated")
+        groups[gl].append(f"{scale} (T={tval})")
+
+    # Helper to format lists: A, B, and C
+    def join_items(items):
+        if len(items) == 0:
+            return ""
+        if len(items) == 1:
+            return items[0]
+        if len(items) == 2:
+            return f"{items[0]} and {items[1]}"
+        return ", ".join(items[:-1]) + f", and {items[-1]}"
+
+    narrative_parts = []
+
+    # Very Elevated
+    if groups["Very Elevated"]:
+        narrative_parts.append(
+            f"{client_name} reported Very Elevated scores in {join_items(groups['Very Elevated'])}"
+        )
+
+    # Elevated
+    if groups["Elevated"]:
+        narrative_parts.append(
+            f"as well as Elevated scores in {join_items(groups['Elevated'])}"
+        )
+
+    # Slightly Elevated
+    if groups["Slightly Elevated"]:
+        narrative_parts.append(
+            f"as well as Slightly Elevated scores in {join_items(groups['Slightly Elevated'])}"
+        )
+
+    # Not Elevated
+    if groups["Not Elevated"]:
+        narrative_parts.append(
+            f"Her scores for {join_items(groups['Not Elevated'])} were Not Elevated"
+        )
+
+    # ADHD Index probability sentence
+    if adhd_prob:
+        narrative_parts.append(
+            f"Her ADHD Index was in the Very High range, corresponding to a {adhd_prob} probability"
+        )
+
+    # Combine with proper punctuation
+    narrative = ". ".join(narrative_parts) + "."
+
+    return narrative
+
+
     # ---- Response style from Total row (SW) ----
     response_style = None
     total_rows = cefi_df[cefi_df["Scale"].str.strip().str.lower() == "total"]
@@ -877,8 +950,14 @@ with tab6:
             caars_tscores = st.session_state.get("caars_tscores", {})
             caars_guidelines = st.session_state.get("caars_guidelines", {})
             caars_symptom_counts = st.session_state.get("caars_symptom_counts", [])
-            caars_adhd_prob = st.session_state.get("caars_adhd_index_prob")
-
+            caars_adhd_prob = st.session_state.get("caars_adhd_index_prob", "")
+            
+            # Build final narrative
+            caars_narrative = build_caars_narrative(client_name="Ms. Smith")
+            
+            # Add to lookup
+            lookup["CAARS Narrative"] = caars_narrative
+        
             # T-scores from the header row table on page 2
             # Placeholders: {{CAARS <Scale> T-score}}
             for scale, t_val in caars_tscores.items():
