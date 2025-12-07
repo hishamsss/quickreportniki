@@ -601,7 +601,7 @@ with tab5:  # CAARS-2 tab
     ]
 
 
-        if uploaded_caars:
+    if uploaded_caars:
         try:
             with pdfplumber.open(uploaded_caars) as pdf:
                 # ---------- Page 2 (index 1): T-scores + Symptom Counts ----------
