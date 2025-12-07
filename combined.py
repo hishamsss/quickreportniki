@@ -586,19 +586,62 @@ with tab5:  # CAARS-2 tab
                 if len(pdf.pages) > 1:
                     page2 = pdf.pages[1]
 
-                    # 1) Table where headers are scale names and next row has T-scores
-                    tables2 = page2.extract_tables()
-                    if tables2:
-                        tbl = tables2[0]
+                    tables2 = page2.extract_tables() or []
+
+                    # 1) Find the table that contains the CAARS content scale labels
+                    for tbl in tables2:
                         df = pd.DataFrame(tbl)
-                        if df.shape[0] >= 2:
-                            headers = [str(x).strip() for x in df.iloc[0]]
-                            t_row = df.iloc[1]
-                            for col_idx, scale in enumerate(headers):
-                                if scale and col_idx < len(t_row):
-                                    t_val = str(t_row[col_idx]).strip()
-                                    if t_val:
-                                        caars_tscores[scale] = t_val
+
+                        # DEBUG: uncomment to see raw tables
+                        # st.write("Page 2 raw table:", df)
+
+                        header_idx = None
+                        # Look for a row that has typical CAARS scale labels
+                        for i, row in df.iterrows():
+                            row_text = " ".join(str(c) for c in row)
+                            if (
+                                "Inattention" in row_text
+                                and "Hyperactivity" in row_text
+                                and "Impulsivity" in row_text
+                            ):
+                                header_idx = i
+                                break
+
+                        if header_idx is None:
+                            continue  # not our T-score table
+
+                        # Find the first row *below* the header with mostly numeric cells (the T-scores)
+                        score_idx = None
+                        for j in range(header_idx + 1, len(df)):
+                            numeric_count = 0
+                            for cell in df.iloc[j]:
+                                s = str(cell).strip()
+                                if re.fullmatch(r"\d+", s):
+                                    numeric_count += 1
+                            if numeric_count >= 3:  # heuristic: at least 3 T-scores in that row
+                                score_idx = j
+                                break
+
+                        if score_idx is None:
+                            continue
+
+                        headers = [str(x).strip() for x in df.iloc[header_idx]]
+                        t_row = df.iloc[score_idx]
+
+                        for col_idx, scale in enumerate(headers):
+                            scale = scale.strip()
+                            if not scale:
+                                continue
+                            if col_idx >= len(t_row):
+                                continue
+                            t_val = str(t_row[col_idx]).strip()
+                            # only keep pure integer cells as T-scores
+                            if re.fullmatch(r"\d+", t_val):
+                                caars_tscores[scale] = t_val
+
+                        # once we’ve found and processed the T-score table, we can stop
+                        break
+
 
                     # 2) Symptom Count table: find the row with "Symptom Count"
                     for raw_tbl in tables2:
