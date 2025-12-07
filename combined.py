@@ -946,7 +946,41 @@ with tab6:
             caars_guidelines = st.session_state.get("caars_guidelines", {})
             caars_symptom_counts = st.session_state.get("caars_symptom_counts", [])
             caars_adhd_prob = st.session_state.get("caars_adhd_index_prob", "")
+
             
+            # === CAARS ADHD Diagnosis Logic ===
+            sc = st.session_state.get("caars_symptom_counts", [])
+            
+            # Default (in case parsing failed)
+            diagnosis_text = "Based on this symptom pattern, she does not meet the DSM-5 symptom threshold for ADHD."
+            
+            if len(sc) >= 2:
+                inattentive = int(sc[0])   # Symptom Count 1
+                hyperactive = int(sc[1])   # Symptom Count 2
+            
+                if inattentive >= 5 and hyperactive < 5:
+                    diagnosis_text = (
+                        "Based on this symptom pattern, she meets the DSM-5 symptom threshold "
+                        "for ADHD, Inattentive Presentation."
+                    )
+                elif inattentive < 5 and hyperactive >= 5:
+                    diagnosis_text = (
+                        "Based on this symptom pattern, she meets the DSM-5 symptom threshold "
+                        "for ADHD, Hyperactive/Impulsive Presentation."
+                    )
+                elif inattentive >= 5 and hyperactive >= 5:
+                    diagnosis_text = (
+                        "Based on this symptom pattern, she meets the DSM-5 symptom threshold "
+                        "for ADHD, Combined Presentation."
+                    )
+                else:  # Both below 5
+                    diagnosis_text = (
+                        "Based on this symptom pattern, she does not meet the DSM-5 symptom threshold for ADHD."
+                    )
+            
+            # Add to lookup
+            lookup["CAARS ADHD Diagnosis"] = diagnosis_text
+
             # Build final narrative
             caars_narrative = build_caars_narrative(client_name="Ms. Smith")
             
