@@ -579,52 +579,54 @@ with tab5:  # CAARS-2 tab
     caars_symptom_counts = []
     caars_adhd_prob = None
 
-    # Order of scales along the CAARS content/DSM bar (matches your screenshot)
+    # Order of scales along the CAARS bar graph / narrative
+    # Make this MATCH your Word placeholders exactly:
+    # {{CAARS Inattention/Executive Dysfunction T-score}}
+    # {{CAARS Hyperactivity T-score}}
+    # {{CAARS Impulsivity T-score}}
+    # {{CAARS Emotional Dysregulation T-score}}
+    # {{CAARS Negative Self-Concept T-score}}
+    # {{CAARS DSM ADHD Inattentive Symptoms T-score}}
+    # {{CAARS DSM ADHD Hyperactive/Impulsive Symptoms T-score}}
+    # {{CAARS Total ADHD Symptoms T-score}}
     scale_order = [
         "Inattention/Executive Dysfunction",
         "Hyperactivity",
         "Impulsivity",
         "Emotional Dysregulation",
         "Negative Self-Concept",
-        "DSM ADHD Inattentive",
-        "DSM ADHD Hyperactive/Impulsive",
-        "DSM Total ADHD",
+        "DSM ADHD Inattentive Symptoms",
+        "DSM ADHD Hyperactive/Impulsive Symptoms",
+        "Total ADHD Symptoms",
     ]
 
-    if uploaded_caars:
+
+        if uploaded_caars:
         try:
             with pdfplumber.open(uploaded_caars) as pdf:
-                st.write("CAARS: number of pages:", len(pdf.pages))
-
                 # ---------- Page 2 (index 1): T-scores + Symptom Counts ----------
                 if len(pdf.pages) > 1:
                     page2 = pdf.pages[1]
 
-                    # Extract tables on page 2
-                    tables = page2.extract_tables() or []
-                    st.write("CAARS: tables found on page 2:", len(tables))
+                    # --- 1) T-scores via "first eight two-digit numbers" logic ---
+                    text2 = page2.extract_text() or ""
+                    lines = text2.split("\n")
 
-                    # --- 1) T-scores from column 3 (index 2), across ALL tables ---
-                    tscores = []
-                    for ti, caars_table in enumerate(tables):
-                        st.write(f"Table {ti} (first 5 rows):", caars_table[:5])
-                        for row in caars_table:
-                            if len(row) >= 3:
-                                value = row[2]
-                                if value and str(value).strip().isdigit():
-                                    tscores.append(str(value).strip())
-                        # If we already have at least 8, we can stop looking
-                        if len(tscores) >= len(scale_order):
-                            break
+                    numbers_in_order = []
+                    for line in lines:
+                        nums = re.findall(r"\b\d{2}\b", line)
+                        numbers_in_order.extend(nums)
 
-                    st.write("Raw T-score list:", tscores)
+                    # First 8 two-digit numbers correspond to the 8 bars
+                    eight_bars = numbers_in_order[:8]
 
-                    # Map them to fixed scale names in order
-                    for scale, t_val in zip(scale_order, tscores):
+                    # Map them onto the fixed scale order
+                    for scale, t_val in zip(scale_order, eight_bars):
                         caars_tscores[scale] = t_val
 
                     # --- 2) Symptom Count table: values like 7/9 and 6/9 ---
-                    for raw_tbl in tables:
+                    tables2 = page2.extract_tables() or []
+                    for raw_tbl in tables2:
                         df = pd.DataFrame(raw_tbl)
                         found_header_row = None
                         for i, row in df.iterrows():
@@ -636,20 +638,20 @@ with tab5:  # CAARS-2 tab
                             data_row = df.iloc[found_header_row + 1]
                             for val in data_row:
                                 s = str(val).strip()
+                                # look for patterns like "7/9", "6/9"
                                 m = re.match(r"^(\d+)/9$", s)
                                 if m:
-                                    caars_symptom_counts.append(m.group(1))  # keep just "7", "6"
-                            break  # done once we found the Symptom Count row
+                                    caars_symptom_counts.append(m.group(1))  # e.g., "7", "6"
+                            break  # stop after first Symptom Count table
 
                 # ---------- Page 3 (index 2): CAARS-2 ADHD Index probability ----------
                 if len(pdf.pages) > 2:
                     page3 = pdf.pages[2]
                     text3 = page3.extract_text() or ""
-                    st.write("Snippet of page 3 text:", text3[:500])
 
                     # Prefer something near "CAARS-2 ADHD Index", fallback to first %
                     m = re.search(
-                        r"CAARS.?2.*?ADHD Index.*?(\d+)%", text3,
+                        r"CAARS-?2.*?ADHD Index.*?(\d+)%", text3,
                         flags=re.IGNORECASE | re.DOTALL
                     )
                     if not m:
@@ -662,8 +664,8 @@ with tab5:  # CAARS-2 tab
             st.session_state["caars_symptom_counts"] = caars_symptom_counts
             st.session_state["caars_adhd_index_prob"] = caars_adhd_prob
 
-            # Debug
-            st.write("CAARS T-scores dict:", caars_tscores)
+            # Debug – you should now see 8 T-scores in order
+            st.write("CAARS T-scores:", caars_tscores)
             st.write("CAARS Symptom Counts:", caars_symptom_counts)
             st.write("CAARS ADHD Index Probability:", caars_adhd_prob)
 
