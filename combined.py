@@ -576,11 +576,11 @@ with tab5:  # CAARS-2 tab
     )
 
     caars_tscores = {}
-    caars_symptom_counts = []  # <-- plural & consistent
+    caars_symptom_counts = []
     caars_adhd_prob = None
 
-    # Known scale labels we care about (as they should appear in the text)
-    known_scales = [
+    # Order of scales along the CAARS content/DSM bar (matches your screenshot)
+    scale_order = [
         "Inattention/Executive Dysfunction",
         "Hyperactivity",
         "Impulsivity",
@@ -594,91 +594,32 @@ with tab5:  # CAARS-2 tab
     if uploaded_caars:
         try:
             with pdfplumber.open(uploaded_caars) as pdf:
-                # --- Page 2 (index 1): T-scores + Symptom Counts ---
+                # ---------- Page 2 (index 1): T-scores + Symptom Counts ----------
                 if len(pdf.pages) > 1:
                     page2 = pdf.pages[1]
-                    text2 = page2.extract_text() or ""
-                    tables2 = page2.extract_tables() or []
 
-                    # ---------- 1) TRY TABLE-BASED T-SCORES ----------
-                    for tbl in tables2:
-                        df = pd.DataFrame(tbl)
+                    # Extract tables on page 2
+                    tables = page2.extract_tables() or []
 
-                        header_idx = None
-                        # Look for a row that appears to be the scale-name row
-                        for i, row in df.iterrows():
-                            row_text = " ".join(str(c) for c in row)
-                            if (
-                                "Inattention" in row_text
-                                and "Hyperactivity" in row_text
-                                and "Impulsivity" in row_text
-                            ):
-                                header_idx = i
-                                break
+                    # --- 1) T-scores from first table, 3rd column (index 2) ---
+                    if tables:
+                        caars_table = tables[0]     # same assumption as your working script
+                        tscores = []
 
-                        if header_idx is None:
-                            continue  # not our table
+                        for row in caars_table:
+                            # Skip rows that don't have enough columns
+                            if len(row) >= 3:
+                                value = row[2]
+                                # keep only T-scores (digits)
+                                if value and value.strip().isdigit():
+                                    tscores.append(value.strip())
 
-                        # Find first row below header with mostly numeric entries (T-scores)
-                        score_idx = None
-                        for j in range(header_idx + 1, len(df)):
-                            numeric_count = 0
-                            for cell in df.iloc[j]:
-                                s = str(cell).strip()
-                                if re.fullmatch(r"\d+", s):
-                                    numeric_count += 1
-                            if numeric_count >= 3:
-                                score_idx = j
-                                break
+                        # Map them to fixed scale names in order
+                        for scale, t_val in zip(scale_order, tscores):
+                            caars_tscores[scale] = t_val
 
-                        if score_idx is None:
-                            continue
-
-                        headers = [str(x).strip() for x in df.iloc[header_idx]]
-                        t_row = df.iloc[score_idx]
-
-                        for col_idx, scale in enumerate(headers):
-                            scale = scale.strip()
-                            if not scale:
-                                continue
-                            if col_idx >= len(t_row):
-                                continue
-                            t_val = str(t_row[col_idx]).strip()
-                            if re.fullmatch(r"\d+", t_val):
-                                caars_tscores[scale] = t_val
-
-                        # once we processed T-score table, stop
-                        break
-
-                    # ---------- 2) FALLBACK: TEXT-BASED T-SCORES ----------
-                    if not caars_tscores:
-                        lines = [l.strip() for l in text2.splitlines() if l.strip()]
-                        for scale in known_scales:
-                            # words for this scale (lowercased)
-                            scale_words = re.findall(r"\w+", scale.lower())
-                            found_value = None
-
-                            for idx, line in enumerate(lines):
-                                line_low = line.lower()
-                                if all(w in line_low for w in scale_words):
-                                    # try same line
-                                    m = re.search(r"(\d{2,3})", line)
-                                    if m:
-                                        found_value = m.group(1)
-                                        break
-                                    # else check next 2 lines
-                                    for k in range(idx + 1, min(idx + 3, len(lines))):
-                                        m2 = re.search(r"(\d{2,3})", lines[k])
-                                        if m2:
-                                            found_value = m2.group(1)
-                                            break
-                                    break
-
-                            if found_value:
-                                caars_tscores[scale] = found_value
-
-                    # ---------- 3) SYMPTOM COUNTS FROM TABLE ----------
-                    for raw_tbl in tables2:
+                    # --- 2) Symptom Count table: two values like 7/9 and 6/9 ---
+                    for raw_tbl in tables:
                         df = pd.DataFrame(raw_tbl)
                         found_header_row = None
                         for i, row in df.iterrows():
@@ -690,18 +631,18 @@ with tab5:  # CAARS-2 tab
                             data_row = df.iloc[found_header_row + 1]
                             for val in data_row:
                                 s = str(val).strip()
-                                # look for patterns like "7/9", "6/9", etc.
+                                # look for patterns like "7/9", "6/9"
                                 m = re.match(r"^(\d+)/9$", s)
                                 if m:
-                                    caars_symptom_counts.append(m.group(1))
-                            break  # done with Symptom Count
+                                    caars_symptom_counts.append(m.group(1))  # keep just "7", "6"
+                            break  # done once we found the Symptom Count row
 
-                # --- Page 3 (index 2): CAARS 2–ADHD Index probability (e.g., "98%") ---
+                # ---------- Page 3 (index 2): CAARS-2 ADHD Index probability ----------
                 if len(pdf.pages) > 2:
                     page3 = pdf.pages[2]
                     text3 = page3.extract_text() or ""
 
-                    # Prefer a match near "CAARS 2-ADHD Index", fallback to first %
+                    # Prefer something near "CAARS-2 ADHD Index", fallback to first %
                     m = re.search(
                         r"CAARS-?2.*?ADHD Index.*?(\d+)%", text3,
                         flags=re.IGNORECASE | re.DOTALL
@@ -724,8 +665,6 @@ with tab5:  # CAARS-2 tab
         except Exception as e:
             st.error(f"Error processing CAARS-2 PDF: {e}")
             st.exception(e)
-
-
 
 with tab6:
     st.subheader("Report Settings")
