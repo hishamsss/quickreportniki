@@ -664,12 +664,22 @@ with tab5:  # your CAARS tab name
             import re
 
             def _prepare_table(raw_tbl):
-                """Turn a raw pdfplumber table into a DataFrame with header row as columns."""
+                """Turn a raw pdfplumber table into a DataFrame using the row
+                that contains T-score & Guideline as the header row."""
                 df = pd.DataFrame(raw_tbl)
-                header = df.iloc[0].astype(str).tolist()
-                df = df.drop(index=0).reset_index(drop=True)
+            
+                header_idx = 0
+                for i, row in df.iterrows():
+                    row_str = " ".join(str(x) for x in row)
+                    if re.search(r"t.?score", row_str, re.I) and "guideline" in row_str.lower():
+                        header_idx = i
+                        break
+            
+                header = df.iloc[header_idx].astype(str).tolist()
+                df = df.iloc[header_idx + 1 :].reset_index(drop=True)
                 df.columns = header
                 return df
+
 
             def _select_scale_t_guideline(df):
                 """
@@ -714,6 +724,9 @@ with tab5:  # your CAARS tab name
             # --- DSM Scales table ---
             dsm_raw = _prepare_table(tables[1])
             dsm_df = _select_scale_t_guideline(dsm_raw)
+
+            content_df["Guideline"] = content_df["Guideline"].astype(str).str.strip()
+            dsm_df["Guideline"] = dsm_df["Guideline"].astype(str).str.strip()
 
             # --- ADHD Index table ---
             index_raw = _prepare_table(tables[2])
