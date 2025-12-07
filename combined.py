@@ -375,12 +375,91 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
 
     return "".join(sentences)
 
+def _format_caars_scale_list(df: pd.DataFrame, guideline: str) -> str:
+    """
+    Return something like:
+    'Inattention/Executive Dysfunction (T=71) and Hyperactivity (T=74)'
+    for a given guideline (e.g., 'Very Elevated', 'Not Elevated').
+    """
+    if df is None or df.empty:
+        return ""
+
+    sub = df[df["Guideline"] == guideline].copy()
+    if sub.empty:
+        return ""
+
+    items = [f"{row['Scale']} (T={row['T-score']})" for _, row in sub.iterrows()]
+
+    if len(items) == 1:
+        return items[0]
+    elif len(items) == 2:
+        return " and ".join(items)
+    else:
+        return "; ".join(items[:-1]) + f"; and {items[-1]}"
+
+
+def build_caars2_narrative(name: str, pronoun_cap: str = "Her") -> str:
+    """
+    Build a CAARS-2 narrative like:
+
+    Ms. Smith reported Very Elevated scores in Inattention/Executive Dysfunction (T=71) and Hyperactivity (T=74),
+    as well as Elevated scores in DSM ADHD Inattentive Symptoms (T=64), DSM ADHD Hyperactive/Impulsive Symptoms (T=68),
+    and Total ADHD Symptoms (T=67). Her scores for Impulsivity (T=57), Emotional Dysregulation (T=51),
+    and Negative Self-Concept (T=43) were Not Elevated. Her ADHD Index was in the Very High range,
+    corresponding to a 98% probability.
+    """
+    content_df = st.session_state.get("caars_content_df", pd.DataFrame())
+    dsm_df = st.session_state.get("caars_dsm_df", pd.DataFrame())
+    index_info = st.session_state.get("caars_index", {})
+
+    pronoun_lower = pronoun_cap.lower()
+
+    # --- Very Elevated (Content) ---
+    very_elevated_content = _format_caars_scale_list(content_df, "Very Elevated")
+
+    # --- Elevated (DSM) ---
+    elevated_dsm = _format_caars_scale_list(dsm_df, "Elevated")
+
+    # --- Not Elevated (Content) ---
+    not_elevated_content = _format_caars_scale_list(content_df, "Not Elevated")
+
+    sentences = []
+
+    # Sentence 1: Very Elevated + Elevated
+    if very_elevated_content or elevated_dsm:
+        s1 = f"{name} reported"
+
+        if very_elevated_content:
+            s1 += f" Very Elevated scores in {very_elevated_content}"
+        if elevated_dsm:
+            if very_elevated_content:
+                s1 += f", as well as Elevated scores in {elevated_dsm}"
+            else:
+                s1 += f" Elevated scores in {elevated_dsm}"
+
+        s1 += "."
+        sentences.append(s1)
+
+    # Sentence 2: Not Elevated content scales
+    if not_elevated_content:
+        s2 = f" {pronoun_cap} scores for {not_elevated_content} were Not Elevated."
+        sentences.append(s2)
+
+    # Sentence 3: ADHD Index
+    idx_guideline = index_info.get("Guideline")
+    idx_prob = index_info.get("Probability")
+    if idx_guideline and idx_prob:
+        s3 = f" {pronoun_cap} ADHD Index was in the {idx_guideline} range, corresponding to a {idx_prob} probability."
+        sentences.append(s3)
+
+    return "".join(sentences).strip()
+
 
 # === Streamlit App ===
 
 st.title("\U0001F4C4 Report Writer")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["WIAT", "Beery", "CEFI", "CVLT", "Finalize"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["WIAT", "Beery", "CEFI", "CVLT", "CAARS-2", "Finalize"])
 
 with tab1:
     uploaded_doc = st.file_uploader("\U0001F4C4 Upload WIAT-4 Report (.docx)", type="docx", key="wiat_upload")
@@ -566,7 +645,67 @@ with tab4:
         except Exception as e:
             st.error(f"Error processing CVLT PDF: {e}")
             st.exception(e)
-with tab5:
+
+with tab6:  # e.g., "CAARS" tab
+    st.subheader("CAARS-2 Self-Report")
+
+    uploaded_caars = st.file_uploader(
+        "Upload CAARS-2 Self-Report (.pdf)",
+        type="pdf",
+        key="caars_upload",
+    )
+
+    if uploaded_caars:
+        try:
+            import pdfplumber
+
+            with pdfplumber.open(uploaded_caars) as pdf:
+                # Page 4 in the report -> index 3
+                tables = pdf.pages[3].extract_tables()
+
+            # --- Content Scales table ---
+            content_raw = pd.DataFrame(tables[0])
+            content_raw.columns = content_raw.iloc[0]
+            content_raw = content_raw.drop(index=0).reset_index(drop=True)
+            content_df = content_raw.rename(columns={content_raw.columns[0]: "Scale"})
+            content_df = content_df[["Scale", "T-score", "Guideline"]]
+
+            # --- DSM Scales table ---
+            dsm_raw = pd.DataFrame(tables[1])
+            dsm_raw.columns = dsm_raw.iloc[0]
+            dsm_raw = dsm_raw.drop(index=0).reset_index(drop=True)
+            dsm_df = dsm_raw.rename(columns={dsm_raw.columns[0]: "Scale"})
+            dsm_df = dsm_df[["Scale", "T-score", "Guideline"]]
+
+            # --- ADHD Index table ---
+            index_raw = pd.DataFrame(tables[2])
+            index_raw.columns = index_raw.iloc[0]
+            index_raw = index_raw.drop(index=0).reset_index(drop=True)
+            # Row looks like: Scale | Raw Score | Probability Score | 90% CI | Guideline
+            adhd_index_prob = str(index_raw.loc[0, "Probability Score"]).strip()  # e.g., "98%"
+            adhd_index_guideline = str(index_raw.loc[0, "Guideline"]).strip()     # e.g., "Very High"
+
+            # Store for later use
+            st.session_state["caars_content_df"] = content_df
+            st.session_state["caars_dsm_df"] = dsm_df
+            st.session_state["caars_index"] = {
+                "Probability": adhd_index_prob,
+                "Guideline": adhd_index_guideline,
+            }
+
+            # Optional: show preview
+            st.write("Content Scales")
+            st.dataframe(content_df)
+            st.write("DSM Scales")
+            st.dataframe(dsm_df)
+            st.write("ADHD Index")
+            st.json(st.session_state["caars_index"])
+
+        except Exception as e:
+            st.error(f"Error processing CAARS-2 PDF: {e}")
+            st.exception(e)
+
+with tab6:
     st.subheader("Report Settings")
 
     # 1) Always-visible fields:
