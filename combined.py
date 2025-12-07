@@ -594,31 +594,36 @@ with tab5:  # CAARS-2 tab
     if uploaded_caars:
         try:
             with pdfplumber.open(uploaded_caars) as pdf:
+                st.write("CAARS: number of pages:", len(pdf.pages))
+
                 # ---------- Page 2 (index 1): T-scores + Symptom Counts ----------
                 if len(pdf.pages) > 1:
                     page2 = pdf.pages[1]
 
                     # Extract tables on page 2
                     tables = page2.extract_tables() or []
+                    st.write("CAARS: tables found on page 2:", len(tables))
 
-                    # --- 1) T-scores from first table, 3rd column (index 2) ---
-                    if tables:
-                        caars_table = tables[0]     # same assumption as your working script
-                        tscores = []
-
+                    # --- 1) T-scores from column 3 (index 2), across ALL tables ---
+                    tscores = []
+                    for ti, caars_table in enumerate(tables):
+                        st.write(f"Table {ti} (first 5 rows):", caars_table[:5])
                         for row in caars_table:
-                            # Skip rows that don't have enough columns
                             if len(row) >= 3:
                                 value = row[2]
-                                # keep only T-scores (digits)
-                                if value and value.strip().isdigit():
-                                    tscores.append(value.strip())
+                                if value and str(value).strip().isdigit():
+                                    tscores.append(str(value).strip())
+                        # If we already have at least 8, we can stop looking
+                        if len(tscores) >= len(scale_order):
+                            break
 
-                        # Map them to fixed scale names in order
-                        for scale, t_val in zip(scale_order, tscores):
-                            caars_tscores[scale] = t_val
+                    st.write("Raw T-score list:", tscores)
 
-                    # --- 2) Symptom Count table: two values like 7/9 and 6/9 ---
+                    # Map them to fixed scale names in order
+                    for scale, t_val in zip(scale_order, tscores):
+                        caars_tscores[scale] = t_val
+
+                    # --- 2) Symptom Count table: values like 7/9 and 6/9 ---
                     for raw_tbl in tables:
                         df = pd.DataFrame(raw_tbl)
                         found_header_row = None
@@ -631,7 +636,6 @@ with tab5:  # CAARS-2 tab
                             data_row = df.iloc[found_header_row + 1]
                             for val in data_row:
                                 s = str(val).strip()
-                                # look for patterns like "7/9", "6/9"
                                 m = re.match(r"^(\d+)/9$", s)
                                 if m:
                                     caars_symptom_counts.append(m.group(1))  # keep just "7", "6"
@@ -641,10 +645,11 @@ with tab5:  # CAARS-2 tab
                 if len(pdf.pages) > 2:
                     page3 = pdf.pages[2]
                     text3 = page3.extract_text() or ""
+                    st.write("Snippet of page 3 text:", text3[:500])
 
                     # Prefer something near "CAARS-2 ADHD Index", fallback to first %
                     m = re.search(
-                        r"CAARS-?2.*?ADHD Index.*?(\d+)%", text3,
+                        r"CAARS.?2.*?ADHD Index.*?(\d+)%", text3,
                         flags=re.IGNORECASE | re.DOTALL
                     )
                     if not m:
@@ -658,14 +663,14 @@ with tab5:  # CAARS-2 tab
             st.session_state["caars_adhd_index_prob"] = caars_adhd_prob
 
             # Debug
-            st.write("CAARS T-scores:", caars_tscores)
+            st.write("CAARS T-scores dict:", caars_tscores)
             st.write("CAARS Symptom Counts:", caars_symptom_counts)
             st.write("CAARS ADHD Index Probability:", caars_adhd_prob)
 
         except Exception as e:
             st.error(f"Error processing CAARS-2 PDF: {e}")
             st.exception(e)
-
+            
 with tab6:
     st.subheader("Report Settings")
 
