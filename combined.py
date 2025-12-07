@@ -576,7 +576,7 @@ with tab5:  # CAARS-2 tab
     )
 
     caars_tscores = {}
-    caars_symptom_count = []
+    caars_symptom_counts = []
     caars_adhd_prob = None
 
     if uploaded_caars:
