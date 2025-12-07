@@ -608,21 +608,29 @@ with tab5:  # CAARS-2 tab
                 if len(pdf.pages) > 1:
                     page2 = pdf.pages[1]
 
-                    # --- 1) T-scores via "first eight two-digit numbers" logic ---
+                    # --- Extract T-scores using 20th → 27th numeric tokens ---
                     text2 = page2.extract_text() or ""
                     lines = text2.split("\n")
-
-                    numbers_in_order = []
+                    
+                    # Extract ANY length numbers (1–3 digits)
+                    all_numbers = []
                     for line in lines:
-                        nums = re.findall(r"\b\d{2}\b", line)
-                        numbers_in_order.extend(nums)
-
-                    # First 8 two-digit numbers correspond to the 8 bars
-                    eight_bars = numbers_in_order[:8]
-
-                    # Map them onto the fixed scale order
-                    for scale, t_val in zip(scale_order, eight_bars):
+                        nums = re.findall(r"\b\d{1,3}\b", line)
+                        all_numbers.extend(nums)
+                    
+                    # Debug:
+                    # st.write("ALL NUMBERS ON PAGE 2:", all_numbers)
+                    
+                    # Safeguard: ensure we have at least 27 numbers
+                    if len(all_numbers) >= 27:
+                        tscore_block = all_numbers[19:27]  # Python index: 19→26 inclusive = 20th→27th
+                    else:
+                        tscore_block = []
+                    
+                    # Map to scales
+                    for scale, t_val in zip(scale_order, tscore_block):
                         caars_tscores[scale] = t_val
+
 
                     # --- 2) Symptom Count table: values like 7/9 and 6/9 ---
                     tables2 = page2.extract_tables() or []
