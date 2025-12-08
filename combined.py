@@ -352,10 +352,12 @@ def classify_caars_probability(prob_str):
     else:
         return "-"
 
-def build_caars_narrative(client_name="the client"):
-    tscores = st.session_state.get("caars_tscores", {})
-    guidelines = st.session_state.get("caars_guidelines", {})
+def build_caars_narrative(client_name="Ms. Smith"):
+    caars_tscores = st.session_state.get("caars_tscores", {})
+    caars_guidelines = st.session_state.get("caars_guidelines", {})
+    caars_symptom_counts = st.session_state.get("caars_symptom_counts", [])
     adhd_prob = st.session_state.get("caars_adhd_index_prob", "")
+    adhd_prob_class = st.session_state.get("caars_prob_class", "")
 
     # Build buckets
     buckets = {
@@ -974,16 +976,13 @@ with tab6:
             caars_symptom_counts = st.session_state.get("caars_symptom_counts", [])
             caars_adhd_prob = st.session_state.get("caars_adhd_index_prob", "")
             
-            # === CAARS ADHD Diagnosis Logic ===
-            sc = st.session_state.get("caars_symptom_counts", [])
-            
             # === CAARS Probability Classification ===
-            caars_prob = st.session_state.get("caars_adhd_index_prob")
-            caars_prob_class = classify_caars_probability(caars_prob)
-            lookup["CAARS ADHD Probability Classification"] = caars_prob_class
-            st.session_state["caars_prob_class"] = caars_prob_class  # <-- REQUIRED
-
+            caars_prob_class = classify_caars_probability(caars_adhd_prob)
+            st.session_state["caars_prob_class"] = caars_prob_class
             
+            caars_narrative = build_caars_narrative(client_name="Ms. Smith")
+            lookup["CAARS Narrative"] = caars_narrative
+
             # Default (in case parsing failed)
             diagnosis_text = "Based on this symptom pattern, she does not meet the DSM-5 symptom threshold for ADHD."
             
