@@ -325,6 +325,33 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
         # add/edit to match your actual CEFI output
     }
 
+def classify_caars_probability(prob_str):
+    """
+    prob_str is something like '98%' or '45%'.
+    Returns classification label.
+    """
+    if not prob_str:
+        return "-"
+
+    # Strip '%' and convert to number
+    try:
+        prob = int(prob_str.replace("%", "").strip())
+    except:
+        return "-"
+
+    if 0 <= prob <= 9:
+        return "Very Low"
+    elif 10 <= prob <= 39:
+        return "Low"
+    elif 40 <= prob <= 59:
+        return "Borderline"
+    elif 60 <= prob <= 89:
+        return "High"
+    elif prob >= 90:
+        return "Very High"
+    else:
+        return "-"
+
 def build_caars_narrative(client_name="the client"):
     tscores = st.session_state.get("caars_tscores", {})
     guidelines = st.session_state.get("caars_guidelines", {})
@@ -377,7 +404,7 @@ def build_caars_narrative(client_name="the client"):
     # --- ADHD INDEX PROBABILITY ---
     if adhd_prob:
         narrative_parts.append(
-            f"Her ADHD Index was in the Very High range, corresponding to a {adhd_prob} probability."
+            f"Her ADHD Index was in the {adhd_prob_class} range, corresponding to a {adhd_prob} probability."
         )
 
     return " ".join(narrative_parts)
@@ -946,10 +973,14 @@ with tab6:
             caars_guidelines = st.session_state.get("caars_guidelines", {})
             caars_symptom_counts = st.session_state.get("caars_symptom_counts", [])
             caars_adhd_prob = st.session_state.get("caars_adhd_index_prob", "")
-
+            
             
             # === CAARS ADHD Diagnosis Logic ===
             sc = st.session_state.get("caars_symptom_counts", [])
+
+            caars_prob = st.session_state.get("caars_adhd_index_prob")
+            caars_prob_class = classify_caars_probability(caars_prob)
+            lookup["CAARS ADHD Probability Classification"] = caars_prob_class
             
             # Default (in case parsing failed)
             diagnosis_text = "Based on this symptom pattern, she does not meet the DSM-5 symptom threshold for ADHD."
