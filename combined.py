@@ -403,13 +403,13 @@ def build_caars_narrative(client_name="Ms. Smith"):
             f"Her scores for " + format_list(items) + " were Not Elevated."
         )
 
-    # --- ADHD INDEX PROBABILITY ---
-    if adhd_prob:
+    if adhd_prob and adhd_prob_class:
         narrative_parts.append(
             f"Her ADHD Index was in the {adhd_prob_class} range, corresponding to a {adhd_prob} probability."
         )
 
-    return " ".join(narrative_parts)
+    return " ".join(narrative_parts).strip()
+
 
 
 def format_list(items):
