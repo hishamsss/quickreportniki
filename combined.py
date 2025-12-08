@@ -325,92 +325,162 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
         # add/edit to match your actual CEFI output
     }
 
+def classify_caars_tscore(t):
+    """
+    CAARS-specific T-score classification:
+    70+   -> Very Elevated
+    65-69 -> Elevated
+    60-64 -> Slightly Elevated
+    <60   -> Not Elevated
+    """
+    try:
+        t = int(t)
+    except Exception:
+        return "Not Elevated"
+
+    if t >= 70:
+        return "Very Elevated"
+    elif 65 <= t <= 69:
+        return "Elevated"
+    elif 60 <= t <= 64:
+        return "Slightly Elevated"
+    else:
+        return "Not Elevated"
+
+
 def classify_caars_probability(prob_str):
     """
-    prob_str is something like '98%' or '45%'.
-    Returns classification label.
+    CAARS ADHD Index probability classification:
+    0–9   -> Very Low
+    10–39 -> Low
+    40–59 -> Borderline
+    60–89 -> High
+    90+   -> Very High
     """
     if not prob_str:
-        return "-"
+        return ""
 
-    # Strip '%' and convert to number
+    # prob_str is like "98%" or "45"
+    s = str(prob_str).strip().replace("%", "")
     try:
-        prob = int(prob_str.replace("%", "").strip())
-    except:
-        return "-"
+        p = int(s)
+    except Exception:
+        return ""
 
-    if 0 <= prob <= 9:
+    if 0 <= p <= 9:
         return "Very Low"
-    elif 10 <= prob <= 39:
+    elif 10 <= p <= 39:
         return "Low"
-    elif 40 <= prob <= 59:
+    elif 40 <= p <= 59:
         return "Borderline"
-    elif 60 <= prob <= 89:
+    elif 60 <= p <= 89:
         return "High"
-    elif prob >= 90:
-        return "Very High"
     else:
-        return "-"
+        return "Very High"
 
-def build_caars_narrative(client_name="Ms. Smith"):
-    caars_tscores = st.session_state.get("caars_tscores", {})
-    caars_guidelines = st.session_state.get("caars_guidelines", {})
-    caars_symptom_counts = st.session_state.get("caars_symptom_counts", [])
+
+def build_caars_narrative(client_name="Ms. Smith", pronoun_cap="Her"):
+    """
+    Builds a CAARS-2 narrative in the style:
+
+    Ms. X reported Very Elevated scores in ... and ...,
+    as well as Elevated scores in ...,
+    and Slightly Elevated scores in ....
+    Her scores for ... were Not Elevated.
+    Her ADHD Index was in the Very High range, corresponding to a 98% probability.
+    """
+
+    # ✅ Pull from session_state and give tscores a value
+    tscores = st.session_state.get("caars_tscores", {})          # dict: {scale -> "T"}
+    symptom_counts = st.session_state.get("caars_symptom_counts", [])
     adhd_prob = st.session_state.get("caars_adhd_index_prob", "")
-    adhd_prob_class = st.session_state.get("caars_prob_class", "")
 
-    # Build buckets
-    buckets = {
-        "Very Elevated": [],
-        "Elevated": [],
-        "Slightly Elevated": [],
-        "Not Elevated": []
-    }
+    # Classification for probability
+    adhd_prob_class = classify_caars_probability(adhd_prob)
 
-    for scale, t in tscores.items():
-        cat = guidelines.get(scale, "Not Elevated")
-        buckets[cat].append((scale, t))
+    # Order to list scales in narrative
+    scale_order = [
+        "Inattention/Executive Dysfunction",
+        "Hyperactivity",
+        "Impulsivity",
+        "Emotional Dysregulation",
+        "Negative Self-Concept",
+        "DSM ADHD Inattentive Symptoms",
+        "DSM ADHD Hyperactive/Impulsive Symptoms",
+        "Total ADHD Symptoms",
+    ]
 
-    narrative_parts = []
+    def format_scale_list(pairs):
+        """pairs: list of (scale, t). Returns 'Scale (T=xx) and Scale (T=yy)' etc."""
+        items = [f"{s} (T={t})" for s, t in pairs]
+        if not items:
+            return ""
+        if len(items) == 1:
+            return items[0]
+        if len(items) == 2:
+            return " and ".join(items)
+        return ", ".join(items[:-1]) + ", and " + items[-1]
 
-    # --- VERY ELEVATED ---
-    if buckets["Very Elevated"]:
-        items = [f"{s} (T={t})" for s, t in buckets["Very Elevated"]]
-        narrative_parts.append(
-            f"{client_name} reported Very Elevated scores in " + format_list(items) + "."
+    # Group scales by severity
+    very_elevated = []
+    elevated = []
+    slightly_elevated = []
+    not_elevated = []
+
+    for scale in scale_order:
+        t_str = tscores.get(scale)
+        if not t_str:
+            continue
+        try:
+            t_val = int(t_str)
+        except Exception:
+            continue
+
+        sev = classify_caars_tscore(t_val)
+        if sev == "Very Elevated":
+            very_elevated.append((scale, t_val))
+        elif sev == "Elevated":
+            elevated.append((scale, t_val))
+        elif sev == "Slightly Elevated":
+            slightly_elevated.append((scale, t_val))
+        else:
+            not_elevated.append((scale, t_val))
+
+    # ---------- Sentence 1: Elevated ranges ----------
+    parts = []
+    if very_elevated:
+        parts.append(f"Very Elevated scores in {format_scale_list(very_elevated)}")
+    if elevated:
+        parts.append(f"Elevated scores in {format_scale_list(elevated)}")
+    if slightly_elevated:
+        parts.append(f"Slightly Elevated scores in {format_scale_list(slightly_elevated)}")
+
+    if parts:
+        # Join with ", as well as" but only the *last* one prefixed with "and" if needed
+        if len(parts) == 1:
+            s1 = f"{client_name} reported {parts[0]}."
+        elif len(parts) == 2:
+            s1 = f"{client_name} reported {parts[0]}, as well as {parts[1]}."
+        else:
+            # First two get ", as well as", last one gets ", and"
+            s1 = f"{client_name} reported {parts[0]}, as well as {parts[1]}, and {parts[2]}."
+    else:
+        s1 = f"{client_name} completed the CAARS-2 Self-Report."
+
+    # ---------- Sentence 2: Not Elevated ----------
+    s2 = ""
+    if not_elevated:
+        s2 = f" {pronoun_cap} scores for {format_scale_list(not_elevated)} were Not Elevated."
+
+    # ---------- Sentence 3: ADHD Index ----------
+    s3 = ""
+    if adhd_prob:
+        s3 = (
+            f" {pronoun_cap} ADHD Index was in the {adhd_prob_class} range, "
+            f"corresponding to a {adhd_prob} probability."
         )
 
-    # --- ELEVATED ---
-    if buckets["Elevated"]:
-        items = [f"{s} (T={t})" for s, t in buckets["Elevated"]]
-        prefix = "Additionally," if narrative_parts else f"{client_name} reported"
-        narrative_parts.append(
-            f"{prefix} Elevated scores in " + format_list(items) + "."
-        )
-
-    # --- SLIGHTLY ELEVATED ---
-    if buckets["Slightly Elevated"]:
-        items = [f"{s} (T={t})" for s, t in buckets["Slightly Elevated"]]
-        prefix = "She also demonstrated" if narrative_parts else f"{client_name} demonstrated"
-        narrative_parts.append(
-            f"{prefix} Slightly Elevated scores in " + format_list(items) + "."
-        )
-
-    # --- NOT ELEVATED ---
-    if buckets["Not Elevated"]:
-        items = [f"{s} (T={t})" for s, t in buckets["Not Elevated"]]
-        narrative_parts.append(
-            f"Her scores for " + format_list(items) + " were Not Elevated."
-        )
-
-    if adhd_prob and adhd_prob_class:
-        narrative_parts.append(
-            f"Her ADHD Index was in the {adhd_prob_class} range, corresponding to a {adhd_prob} probability."
-        )
-
-    return " ".join(narrative_parts).strip()
-
-
+    return (s1 + s2 + s3).strip()
 
 def format_list(items):
     """Turns a list into natural language: a, b, and c."""
@@ -471,32 +541,6 @@ def format_list(items):
         )
 
     return "".join(sentences)
-
-def classify_caars_tscore(t):
-    """
-    Classify a CAARS T-score into:
-    - Very Elevated (>= 70)
-    - Elevated (65–69)
-    - Slightly Elevated (60–64)
-    - Not Elevated (< 60)
-    """
-    if t is None or t == "":
-        return ""
-
-    try:
-        # t might be string from PDF, so normalize
-        t_val = int(str(t).strip())
-    except ValueError:
-        return ""
-
-    if t_val >= 70:
-        return "Very Elevated"
-    elif 65 <= t_val <= 69:
-        return "Elevated"
-    elif 60 <= t_val <= 64:
-        return "Slightly Elevated"
-    else:
-        return "Not Elevated"
 
 
 # === Streamlit App ===
