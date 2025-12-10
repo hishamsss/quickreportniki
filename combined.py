@@ -948,6 +948,9 @@ with tab6:  # WAIS tab
         wais_wmi = st.text_input("WMI", key="wais_wmi")
     with col2:
         wais_psi = st.text_input("PSI", key="wais_psi")
+    col1, col2 = st.columns(2)
+    with col1:
+        wais_fsiq = st.text_input("FSIQ", key="wais_fsiq")
 
             
 with tab7:
@@ -1241,7 +1244,6 @@ with tab7:
                 re.sub(r"\s+", " ", k.strip()): ("" if v is None else str(v))
                 for k, v in lookup.items()
             }
-            st.write("WAIS-related keys:", [k for k in lookup.keys() if k.startswith("WAIS")]) #DEGBUGG
             replace_placeholders(template_doc, lookup)
             superscript_suffixes(template_doc)
             delete_rows_with_dash(template_doc)
