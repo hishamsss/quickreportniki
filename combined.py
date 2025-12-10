@@ -3,9 +3,11 @@ import streamlit as st
 import pandas as pd
 import pdfplumber
 import re
+import math
 from docx import Document
 from io import BytesIO
 from docx.enum.text import WD_COLOR_INDEX
+
 
 # === Helper Functions ===
 
@@ -551,6 +553,50 @@ def classify_caars_tscore(t):
     else:
         return "Not Elevated"
 
+def wais_scaled_to_percentile(scaled):
+    try:
+        s = int(str(scaled).strip())
+    except:
+        return ""
+
+    mapping = {
+        1: 1,
+        2: 1,
+        3: 1,
+        4: 2,
+        5: 5,
+        6: 9,
+        7: 16,
+        8: 25,
+        9: 37,
+        10: 50,
+        11: 63,
+        12: 75,
+        13: 84,
+        14: 91,
+        15: 95,
+        16: 98,
+        17: 99,
+        18: 99,
+        19: 99,
+    }
+
+    return mapping.get(s, "")
+
+def wais_standard_to_percentile(std_score):
+    try:
+        x = float(std_score)
+    except:
+        return ""
+
+    # Z-score
+    z = (x - 100) / 15
+
+    # Normal CDF
+    percentile = 0.5 * (1 + math.erf(z / math.sqrt(2)))
+
+    return int(round(percentile * 100))
+
 
 # === Streamlit App ===
 
@@ -1071,6 +1117,61 @@ with tab7:
                         lookup[f"CVLT {norm_label} Percentile*"] = format_percentile_with_suffix(row["Col4"])
                     except Exception:
                         pass
+
+            # === WAIS (from WAIS tab) ===
+
+            # Subtests: scaled scores → percentile → percentile* → classification
+            wais_subtests = {
+                "Block Design": "wais_block_design",
+                "Similarities": "wais_similarities",
+                "Digit Span": "wais_digit_span",
+                "Matrix Reasoning": "wais_matrix_reasoning",
+                "Vocabulary": "wais_vocabulary",
+                "Arithmetic": "wais_arithmetic",
+                "Symbol Search": "wais_symbol_search",
+                "Visual Puzzles": "wais_visual_puzzles",
+                "Information": "wais_information",
+                "Coding": "wais_coding",
+            }
+
+            for label, state_key in wais_subtests.items():
+                val = st.session_state.get(state_key, "")
+                if val:
+                    val_str = str(val).strip()
+
+                    lookup[f"WAIS {label}"] = val_str
+                    
+                    perc = wais_scaled_to_percentile(val_str)
+                    if perc != "":
+                        perc_str = str(perc)
+                        lookup[f"WAIS {label} Percentile"] = perc_str
+                        lookup[f"WAIS {label} Percentile*"] = format_percentile_with_suffix(
+                            perc_str
+                        )
+                        lookup[f"WAIS {label} Classification"] = classify(perc)
+
+            wais_indexes = {
+                "VCI": "wais_vci",
+                "PRI": "wais_pri",
+                "WMI": "wais_wmi",
+                "PSI": "wais_psi",
+            }
+
+            for label, state_key in wais_indexes.items():
+                val = st.session_state.get(state_key, "")
+                if val:
+                    score_str = str(val).strip()
+
+                    lookup[f"WAIS {label}"] = score_str
+
+                    perc = wais_standard_to_percentile(score_str)
+                    perc_str = str(perc)
+                    
+                    lookup[f"WAIS {label} Percentile"] = perc_str
+                    lookup[f"WAIS {label} Percentile*"] = format_percentile_with_suffix(
+                        perc_str
+                    )
+                    lookup[f"WAIS {label} Classification"] = classify(perc)
                         
             # === CAARS-2 (from CAARS tab) ===
             caars_tscores = st.session_state.get("caars_tscores", {})
