@@ -327,6 +327,18 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
     }
 
 def get_adhd_label(prob):
+    # Convert %, spaces, etc.
+    if isinstance(prob, str):
+        prob = prob.replace("%", "").strip()
+
+        # handle fractions like "3/10"
+        if "/" in prob:
+            try:
+                num, den = prob.split("/")
+                prob = float(num) / float(den) * 100
+            except:
+                return "Unknown"
+
     try:
         p = float(prob)
     except:
