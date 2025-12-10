@@ -326,6 +326,54 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
         # add/edit to match your actual CEFI output
     }
 
+    # ---- Response style from Total row (SW) ----
+    response_style = None
+    total_rows = cefi_df[cefi_df["Scale"].str.strip().str.lower() == "total"]
+    if not total_rows.empty:
+        response_style = (total_rows["SW"].iloc[0] or "").strip()
+
+    # First sentence (Response Style)
+    if response_style and response_style.lower().startswith("consistent"):
+        first_sentence = (
+            f"{child_name}'s {rater_relation} demonstrated a Consistent Response Style "
+            f"in her answers without indications of positive or negative bias."
+        )
+    elif response_style:
+        first_sentence = (
+            f"{child_name}'s {rater_relation} demonstrated a {response_style} Response Style "
+            f"in her answers."
+        )
+    else:
+        first_sentence = (
+            f"{child_name}'s {rater_relation} completed the rating form."
+        )
+
+    sentences = [first_sentence]
+
+    # ---- Classification order and wording (matches your classify() function) ----
+    classification_order = [
+        "Extremely Low",
+        "Borderline",
+        "Below Average",
+        "Low Average",
+        "Average",
+        "High Average",
+        "Superior",
+        "Very Superior",
+    ]
+
+    for cls in classification_order:
+        scale_list = format_cefi_scale_list(cefi_df, cls, scale_name_map)
+        if not scale_list:
+            continue
+
+        sentences.append(
+            f" She rated {child_name} in the {cls} range on the following CEFI scales: {scale_list}."
+        )
+
+    return "".join(sentences)
+
+
 def get_adhd_label(prob):
     # Convert %, spaces, etc.
     if isinstance(prob, str):
@@ -1039,7 +1087,10 @@ with tab6:
                 lookup["CAARS ADHD Index Probability"] = str(caars_adhd_prob).strip()
 
             # === Fill and output unified report
-            lookup = {re.sub(r"\s+", " ", k.strip()): v for k, v in lookup.items()}
+            lookup = {
+                re.sub(r"\s+", " ", k.strip()): ("" if v is None else str(v))
+                for k, v in lookup.items()
+            }
             replace_placeholders(template_doc, lookup)
             superscript_suffixes(template_doc)
             delete_rows_with_dash(template_doc)
