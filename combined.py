@@ -1158,6 +1158,7 @@ with tab7:
                 "PRI": "wais_pri",
                 "WMI": "wais_wmi",
                 "PSI": "wais_psi",
+                "FSIQ": "wais_fsiq",
             }
 
             for label, state_key in wais_indexes.items():
