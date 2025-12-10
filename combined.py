@@ -858,7 +858,7 @@ with tab5:  # CAARS-2 tab
             st.exception(e)
 
 with tab6:  # WAIS tab
-    st.subheader("WAIS-IV (input scaled scores")
+    st.subheader("WAIS-IV (input scaled scores)")
 
     col1, col2 = st.columns(2)
 
