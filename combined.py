@@ -1241,6 +1241,7 @@ with tab7:
                 re.sub(r"\s+", " ", k.strip()): ("" if v is None else str(v))
                 for k, v in lookup.items()
             }
+            st.write("WAIS-related keys:", [k for k in lookup.keys() if k.startswith("WAIS")]) #DEGBUGG
             replace_placeholders(template_doc, lookup)
             superscript_suffixes(template_doc)
             delete_rows_with_dash(template_doc)
