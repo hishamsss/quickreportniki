@@ -326,6 +326,26 @@ def build_cefi_parent_narrative(child_name: str, rater_relation: str = "mother")
         # add/edit to match your actual CEFI output
     }
 
+def get_adhd_label(prob):
+    try:
+        p = float(prob)
+    except:
+        return "Unknown"
+
+    if 0 <= p <= 9:
+        return "Very Low"
+    elif 10 <= p <= 39:
+        return "Low"
+    elif 40 <= p <= 59:
+        return "Borderline"
+    elif 60 <= p <= 89:
+        return "High"
+    elif p >= 90:
+        return "Very High"
+    else:
+        return "Unknown"
+
+
 def build_caars_narrative(client_name="the client"):
     tscores = st.session_state.get("caars_tscores", {})
     guidelines = st.session_state.get("caars_guidelines", {})
@@ -377,8 +397,9 @@ def build_caars_narrative(client_name="the client"):
 
     # --- ADHD INDEX PROBABILITY ---
     if adhd_prob:
+        label = get_adhd_label(adhd_prob)
         narrative_parts.append(
-            f"Her ADHD Index was in the Very High range, corresponding to a {adhd_prob} probability."
+            f"Her ADHD Index was in the {label} range, corresponding to a {adhd_prob} probability."
         )
 
     return " ".join(narrative_parts)
