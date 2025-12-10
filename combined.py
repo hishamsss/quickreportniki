@@ -556,7 +556,9 @@ def classify_caars_tscore(t):
 
 st.title("\U0001F4C4 Report Writer")
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["WIAT", "Beery", "CEFI", "CVLT", "CAARS-2", "Finalize"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+    ["WIAT", "Beery", "CEFI", "CVLT", "CAARS-2", "WAIS", "Finalize"]
+)
 
 with tab1:
     uploaded_doc = st.file_uploader("\U0001F4C4 Upload WIAT-4 Report (.docx)", type="docx", key="wiat_upload")
@@ -854,8 +856,55 @@ with tab5:  # CAARS-2 tab
         except Exception as e:
             st.error(f"Error processing CAARS-2 PDF: {e}")
             st.exception(e)
+
+with tab6:  # WAIS tab
+    st.subheader("WAIS-IV")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        wais_block_design = st.text_input("Block Design", key="wais_block_design")
+    with col2:
+        wais_similarities = st.text_input("Similarities", key="wais_similarities")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        wais_digit_span = st.text_input("Digit Span", key="wais_digit_span")
+    with col2:
+        wais_matrix_reasoning = st.text_input("Matrix Reasoning", key="wais_matrix_reasoning")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        wais_vocabulary = st.text_input("Vocabulary", key="wais_vocabulary")
+    with col2:
+        wais_arithmetic = st.text_input("Arithmetic", key="wais_arithmetic")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        wais_symbol_search = st.text_input("Symbol Search", key="wais_symbol_search")
+    with col2:
+        wais_visual_puzzles = st.text_input("Visual Puzzles", key="wais_visual_puzzles")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        wais_information = st.text_input("Information", key="wais_information")
+    with col2:
+        wais_coding = st.text_input("Coding", key="wais_coding")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        wais_vci = st.text_input("VCI", key="wais_vci")
+    with col2:
+        wais_pri = st.text_input("PRI", key="wais_pri")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        wais_wmi = st.text_input("WMI", key="wais_wmi")
+    with col2:
+        wais_psi = st.text_input("PSI", key="wais_psi")
+
             
-with tab6:
+with tab7:
     st.subheader("Report Settings")
 
     # 1) Always-visible fields:
