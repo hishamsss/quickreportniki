@@ -921,7 +921,7 @@ with tab7:
 
     # 2) If files aren’t uploaded yet, prompt the user:
     if not uploaded_doc:
-        st.info("Please upload both your WIAT report in the WIAT tab.")
+        st.info("Please make sure to fill all tabs before generating report.")
     else:
         # 3) Once both are present, show the generate button
         if st.button("Generate Combined Report"):
