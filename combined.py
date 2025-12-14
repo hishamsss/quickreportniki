@@ -30,11 +30,11 @@ def classify(percentile):
         return "Below Average"
     elif 16 <= percentile <= 24:
         return "Low Average"
-    elif 25 <= percentile <= 75:
+    elif 25 <= percentile <= 74:
         return "Average"
-    elif 76 <= percentile <= 91:
+    elif 75 <= percentile <= 90:
         return "High Average" 
-    elif 92 <= percentile <= 97:
+    elif 91 <= percentile <= 97:
         return "Superior"
     elif percentile >= 98:
         return "Very Superior"
